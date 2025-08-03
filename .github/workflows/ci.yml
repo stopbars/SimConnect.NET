@@ -25,10 +25,7 @@ jobs:
               run: dotnet build --no-restore --configuration Release
 
             - name: Pack SimConnect.NET
-              run: dotnet pack src/SimConnect.NET/SimConnect.NET.csproj \
-                  --no-build \
-                  --configuration Release \
-                  --output ./artifacts
+              run: dotnet pack src/SimConnect.NET/SimConnect.NET.csproj --no-build --configuration Release --output ./artifacts
 
             - name: Upload package artifact
               uses: actions/upload-artifact@v4
