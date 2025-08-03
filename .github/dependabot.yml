@@ -1,0 +1,20 @@
+version: 2
+updates:
+    # NuGet package updates
+    - package-ecosystem: "nuget"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+      commit-message:
+          prefix: "chore(deps):"
+      open-pull-requests-limit: 5
+      enable-beta-ecosystems: true
+
+    # GitHub Actions workflow updates
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+      commit-message:
+          prefix: "chore(deps):"
+      open-pull-requests-limit: 5

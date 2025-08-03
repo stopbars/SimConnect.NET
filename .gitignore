@@ -1,0 +1,90 @@
+# Build output directories
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# IDE directories
+.vs/
+.vscode/
+.idea/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# NuGet packages and package cache
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# MSBuild Binary and Structured Log
+*.binlog
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Common binary file extensions
+*.dll
+*.exe
+*.pdb
+*.lib
+*.exp
+
+# EXCEPT: Keep the bundled SimConnect.dll that's part of the project
+!src/SimConnect.NET/lib/SimConnect.dll
+
+# Application files
+*.app
+*.ipa
+*.deb
+*.dmg
+*.rpm
+*.msi
+*.msm
+*.msp
+*.txz
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

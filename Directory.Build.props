@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.0.1-alpha</Version>
+    <Authors>AussieScorcher</Authors>
+    <Company>AussieScorcher</Company>
+    <Copyright>Copyright (c) AussieScorcher. All rights reserved.</Copyright>
+    <RepositoryUrl>https://github.com/AussieScorcher/SimConnect.NET</RepositoryUrl>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/AussieScorcher/SimConnect.NET</PackageProjectUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.435" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
