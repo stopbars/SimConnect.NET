@@ -1,5 +1,5 @@
-// <copyright file="SimVarDefinition.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimVarDefinition.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 using System;

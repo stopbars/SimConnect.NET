@@ -1,5 +1,5 @@
-// <copyright file="SimConnectVersionBaseType.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectVersionBaseType.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET

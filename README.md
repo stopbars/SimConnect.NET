@@ -28,7 +28,7 @@ await client.DisconnectAsync();
 
 -   ✅ Basic connection and data reading
 -   ✅ Aircraft position and motion data
--   ⏳ More SimVar support
+-   ✅ Full Simvar support
 -   ⏳ Event handling
 -   ⏳ Better error handling
 -   ⏳ Documentation

@@ -1,5 +1,5 @@
-// <copyright file="SimConnectInputEventType.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectInputEventType.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET

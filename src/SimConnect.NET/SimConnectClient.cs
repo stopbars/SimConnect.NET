@@ -1,5 +1,5 @@
-// <copyright file="SimConnectClient.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectClient.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 using System;
@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using SimConnect.NET.AI;
 using SimConnect.NET.Aircraft;
+using SimConnect.NET.Events;
+using SimConnect.NET.InputEvents;
 using SimConnect.NET.SimVar;
 
 namespace SimConnect.NET
@@ -26,6 +28,11 @@ namespace SimConnect.NET
         private SimVarManager? simVarManager;
         private AircraftDataManager? aircraftDataManager;
         private SimObjectManager? simObjectManager;
+        private InputEventManager? inputEventManager;
+        private InputGroupManager? inputGroupManager;
+        private int reconnectAttempts;
+        private Task? reconnectTask;
+        private CancellationTokenSource? reconnectCancellation;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SimConnectClient"/> class.
@@ -45,9 +52,34 @@ namespace SimConnect.NET
         }
 
         /// <summary>
+        /// Occurs when the connection status changes.
+        /// </summary>
+        public event EventHandler<ConnectionStatusChangedEventArgs>? ConnectionStatusChanged;
+
+        /// <summary>
+        /// Occurs when a SimConnect error is encountered.
+        /// </summary>
+        public event EventHandler<SimConnectErrorEventArgs>? ErrorOccurred;
+
+        /// <summary>
         /// Gets a value indicating whether the client is connected to SimConnect.
         /// </summary>
         public bool IsConnected => this.isConnected;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether auto-reconnection is enabled.
+        /// </summary>
+        public bool AutoReconnectEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets the delay between reconnection attempts.
+        /// </summary>
+        public TimeSpan ReconnectDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// Gets or sets the maximum number of reconnection attempts.
+        /// </summary>
+        public int MaxReconnectAttempts { get; set; } = 3;
 
         /// <summary>
         /// Gets the SimVar manager for dynamic SimVar access.
@@ -97,6 +129,40 @@ namespace SimConnect.NET
                 }
 
                 return this.simObjectManager;
+            }
+        }
+
+        /// <summary>
+        /// Gets the input event manager for handling input events and key bindings.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
+        public InputEventManager InputEvents
+        {
+            get
+            {
+                if (!this.isConnected || this.inputEventManager == null)
+                {
+                    throw new InvalidOperationException("Not connected to SimConnect. Call ConnectAsync first.");
+                }
+
+                return this.inputEventManager;
+            }
+        }
+
+        /// <summary>
+        /// Gets the input group manager for organizing and prioritizing input events.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
+        public InputGroupManager InputGroups
+        {
+            get
+            {
+                if (!this.isConnected || this.inputGroupManager == null)
+                {
+                    throw new InvalidOperationException("Not connected to SimConnect. Call ConnectAsync first.");
+                }
+
+                return this.inputGroupManager;
             }
         }
 
@@ -154,13 +220,14 @@ namespace SimConnect.NET
                 cancellationToken).ConfigureAwait(false);
 
             this.isConnected = true;
+            this.OnConnectionStatusChanged(false, true);
 
-            // Initialize managers
             this.simVarManager = new SimVarManager(this.simConnectHandle);
             this.aircraftDataManager = new AircraftDataManager(this.simVarManager);
             this.simObjectManager = new SimObjectManager(this);
+            this.inputEventManager = new InputEventManager(this.simConnectHandle);
+            this.inputGroupManager = new InputGroupManager(this.simConnectHandle);
 
-            // Start background message processing
             this.messageLoopCancellation = new CancellationTokenSource();
             this.messageProcessingTask = this.StartMessageProcessingLoopAsync(this.messageLoopCancellation.Token);
         }
@@ -176,14 +243,18 @@ namespace SimConnect.NET
                 return;
             }
 
-            // Dispose managers first
+            this.reconnectCancellation?.Cancel();
+
             this.simObjectManager?.Dispose();
             this.simVarManager?.Dispose();
+            this.inputEventManager?.Dispose();
+            this.inputGroupManager?.Dispose();
             this.simObjectManager = null;
             this.simVarManager = null;
             this.aircraftDataManager = null;
+            this.inputEventManager = null;
+            this.inputGroupManager = null;
 
-            // Stop message processing
             if (this.messageLoopCancellation != null)
             {
                 this.messageLoopCancellation.Cancel();
@@ -195,7 +266,6 @@ namespace SimConnect.NET
                     }
                     catch (OperationCanceledException)
                     {
-                        // Expected when cancelling
                     }
                 }
 
@@ -204,16 +274,36 @@ namespace SimConnect.NET
                 this.messageProcessingTask = null;
             }
 
+            if (this.reconnectTask != null && !this.reconnectTask.IsCompleted)
+            {
+                try
+                {
+                    await this.reconnectTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+
+            this.reconnectCancellation?.Dispose();
+            this.reconnectCancellation = null;
+            this.reconnectTask = null;
+
             if (this.isConnected && this.simConnectHandle != IntPtr.Zero)
             {
+                var wasConnected = this.isConnected;
                 var result = SimConnectNative.SimConnect_Close(this.simConnectHandle);
                 this.simConnectHandle = IntPtr.Zero;
                 this.isConnected = false;
 
-                // Note: We don't throw on close errors to allow graceful cleanup
+                if (wasConnected)
+                {
+                    this.OnConnectionStatusChanged(true, false);
+                }
+
                 if (result != (int)SimConnectError.None)
                 {
-                    // Log the error if needed, but continue cleanup
+                    // Log warning for non-zero close result, but don't throw
                     System.Diagnostics.Debug.WriteLine($"Warning: SimConnect_Close returned error: {(SimConnectError)result}");
                 }
             }
@@ -240,19 +330,17 @@ namespace SimConnect.NET
                     cancellationToken.ThrowIfCancellationRequested();
                     var result = SimConnectNative.SimConnect_GetNextDispatch(this.simConnectHandle, out var ppData, out var pcbData);
 
-                    // Don't throw on normal "no messages" scenarios
                     if (result != (int)SimConnectError.None)
                     {
-                        // Filter out the common "no messages available" error (-2147467259) to reduce log spam
+                        // Filter out the common "no messages available" error to reduce log spam
                         if (result != -2147467259)
                         {
                             System.Diagnostics.Debug.WriteLine($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
                         }
 
-                        return false; // No message processed
+                        return false;
                     }
 
-                    // Process the message - determine type and route accordingly
                     if (ppData != IntPtr.Zero && pcbData > 0)
                     {
                         var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
@@ -267,18 +355,55 @@ namespace SimConnect.NET
                             case SimConnectRecvId.Exception:
                                 this.ProcessError(ppData);
                                 break;
+                            case SimConnectRecvId.ControllersList:
+                            case SimConnectRecvId.ActionCallback:
+                            case SimConnectRecvId.EnumerateInputEvents:
+                            case SimConnectRecvId.EnumerateInputEventParams:
+                            case SimConnectRecvId.GetInputEvent:
+                            case SimConnectRecvId.SubscribeInputEvent:
+                                this.inputEventManager?.ProcessReceivedData(ppData, pcbData);
+                                break;
+                            case SimConnectRecvId.AirportList:
+                            case SimConnectRecvId.VorList:
+                            case SimConnectRecvId.NdbList:
+                                break;
                             default:
-                                // Forward all other messages to the SimVar manager
                                 this.simVarManager?.ProcessReceivedData(ppData, pcbData);
                                 break;
                         }
 
-                        return true; // Message was processed
+                        return true;
                     }
 
-                    return false; // No valid message
+                    return false;
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Tests the connection to SimConnect by performing a simple operation.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>A task that represents the asynchronous test operation, returning true if the connection is healthy.</returns>
+        public async Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimConnectClient));
+
+            if (!this.isConnected)
+            {
+                return false;
+            }
+
+            try
+            {
+                await this.SimVars.GetAsync<double>("SIMULATION RATE", "number", cancellationToken: cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                this.OnErrorOccurred(SimConnectError.Error, ex, "Connection health check failed");
+                return false;
+            }
         }
 
         /// <summary>
@@ -288,7 +413,6 @@ namespace SimConnect.NET
         {
             if (!this.disposed)
             {
-                // Use synchronous version for disposal
                 Task.Run(async () => await this.DisconnectAsync().ConfigureAwait(false)).GetAwaiter().GetResult();
                 this.disposed = true;
             }
@@ -306,12 +430,11 @@ namespace SimConnect.NET
             {
                 var recvAssignedObjectId = Marshal.PtrToStructure<SimConnectRecvAssignedObjectId>(ppData);
 
-                // Forward to the SimObject manager if available
                 this.simObjectManager?.ProcessObjectCreated(
                     recvAssignedObjectId.RequestId,
                     recvAssignedObjectId.ObjectId,
-                    string.Empty, // Container title not available in this message
-                    default(SimConnectDataInitPosition)); // Position not available in this message
+                    string.Empty,
+                    default(SimConnectDataInitPosition));
 
                 System.Diagnostics.Debug.WriteLine($"Processed assigned object ID: RequestId={recvAssignedObjectId.RequestId}, ObjectId={recvAssignedObjectId.ObjectId}");
             }
@@ -334,7 +457,8 @@ namespace SimConnect.NET
 
                 System.Diagnostics.Debug.WriteLine($"SimConnect error received: {error} (SendId={recvError.SendId}, Index={recvError.Index})");
 
-                // Forward error to SimObject manager for handling failed object operations
+                this.OnErrorOccurred(error, null, $"SimConnect error (SendId={recvError.SendId}, Index={recvError.Index})");
+
                 if (this.simObjectManager != null)
                 {
                     this.simObjectManager.ProcessObjectCreationFailed(recvError.SendId, error);
@@ -343,6 +467,7 @@ namespace SimConnect.NET
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error processing SimConnect error message: {ex.Message}");
+                this.OnErrorOccurred(SimConnectError.Error, ex, "Error processing SimConnect error message");
             }
         }
 
@@ -365,17 +490,28 @@ namespace SimConnect.NET
                     {
                         messageProcessed = await this.ProcessNextMessageAsync(cancellationToken).ConfigureAwait(false);
                     }
-                    catch (SimConnectException)
+                    catch (SimConnectException ex)
                     {
-                        // Continue processing even if individual messages fail
-                        // In a real implementation, you might want to log these errors
+                        this.OnErrorOccurred(ex.ErrorCode, ex, "Message processing failed");
+
+                        // If this is a connection-related error, trigger auto-reconnection
+                        if (this.AutoReconnectEnabled && !ex.ErrorCode.ToString().Contains("UnrecognizedId"))
+                        {
+                            var wasConnected = this.isConnected;
+                            this.isConnected = false;
+                            if (wasConnected)
+                            {
+                                this.OnConnectionStatusChanged(true, false);
+                            }
+
+                            break;
+                        }
                     }
 
                     if (messageProcessed)
                     {
                         consecutiveEmptyPolls = 0;
 
-                        // Process more messages immediately if available
                         continue;
                     }
                     else
@@ -396,7 +532,92 @@ namespace SimConnect.NET
             }
             catch (OperationCanceledException)
             {
-                // Expected when cancelling
+            }
+        }
+
+        /// <summary>
+        /// Raises the ConnectionStatusChanged event.
+        /// </summary>
+        /// <param name="previousStatus">The previous connection status.</param>
+        /// <param name="currentStatus">The current connection status.</param>
+        private void OnConnectionStatusChanged(bool previousStatus, bool currentStatus)
+        {
+            var eventArgs = new ConnectionStatusChangedEventArgs(previousStatus, currentStatus, DateTime.UtcNow);
+            this.ConnectionStatusChanged?.Invoke(this, eventArgs);
+
+            if (this.AutoReconnectEnabled && previousStatus && !currentStatus && this.reconnectAttempts < this.MaxReconnectAttempts)
+            {
+                this.StartAutoReconnectAsync();
+            }
+        }
+
+        /// <summary>
+        /// Raises the ErrorOccurred event.
+        /// </summary>
+        /// <param name="error">The SimConnect error that occurred.</param>
+        /// <param name="exception">The exception that was thrown, if any.</param>
+        /// <param name="context">Additional context about when/where the error occurred.</param>
+        private void OnErrorOccurred(SimConnectError error, Exception? exception = null, string? context = null)
+        {
+            var eventArgs = new SimConnectErrorEventArgs(error, exception, context);
+            this.ErrorOccurred?.Invoke(this, eventArgs);
+        }
+
+        /// <summary>
+        /// Starts the auto-reconnection process.
+        /// </summary>
+        private void StartAutoReconnectAsync()
+        {
+            if (this.reconnectTask != null && !this.reconnectTask.IsCompleted)
+            {
+                return;
+            }
+
+            this.reconnectCancellation?.Cancel();
+            this.reconnectCancellation = new CancellationTokenSource();
+            this.reconnectTask = this.PerformAutoReconnectAsync(this.reconnectCancellation.Token);
+        }
+
+        /// <summary>
+        /// Performs the auto-reconnection attempts.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token to stop reconnection attempts.</param>
+        /// <returns>A task representing the reconnection process.</returns>
+        private async Task PerformAutoReconnectAsync(CancellationToken cancellationToken)
+        {
+            while (this.reconnectAttempts < this.MaxReconnectAttempts && !cancellationToken.IsCancellationRequested && !this.isConnected)
+            {
+                this.reconnectAttempts++;
+
+                try
+                {
+                    await Task.Delay(this.ReconnectDelay, cancellationToken).ConfigureAwait(false);
+
+                    if (cancellationToken.IsCancellationRequested || this.isConnected)
+                    {
+                        break;
+                    }
+
+                    await this.ConnectAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                    if (this.isConnected)
+                    {
+                        this.reconnectAttempts = 0;
+                        System.Diagnostics.Debug.WriteLine("Auto-reconnection successful");
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Auto-reconnection attempt {this.reconnectAttempts} failed: {ex.Message}");
+                    this.OnErrorOccurred(SimConnectError.Error, ex, $"Auto-reconnection attempt {this.reconnectAttempts}");
+                }
+            }
+
+            if (this.reconnectAttempts >= this.MaxReconnectAttempts && !this.isConnected)
+            {
+                System.Diagnostics.Debug.WriteLine("Auto-reconnection failed: Maximum attempts reached");
+                this.OnErrorOccurred(SimConnectError.Error, null, "Auto-reconnection failed: Maximum attempts reached");
             }
         }
     }

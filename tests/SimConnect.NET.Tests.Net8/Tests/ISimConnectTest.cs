@@ -1,5 +1,5 @@
-// <copyright file="ISimConnectTest.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="ISimConnectTest.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 using SimConnect.NET;

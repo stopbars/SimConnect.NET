@@ -1,5 +1,5 @@
-// <copyright file="TestRunner.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="TestRunner.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 using System.Diagnostics;
@@ -27,6 +27,8 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 new SimVarTests(),
                 new AircraftTests(),
                 new AIObjectTests(),
+                new InputEventTests(),
+                new InputEventValueTests(),
                 new PerformanceTests(),
             };
         }
@@ -159,6 +161,49 @@ namespace SimConnect.NET.Tests.Net8.Tests
             return options;
         }
 
+        private static void PrintTestSummary(List<TestResult> results, TimeSpan totalDuration)
+        {
+            var passed = results.Count(r => r.Passed);
+            var failed = results.Count(r => !r.Passed);
+            var totalTests = results.Count;
+
+            Console.WriteLine("📊 Test Results Summary");
+            Console.WriteLine("========================");
+            Console.WriteLine($"✅ Passed: {passed}");
+            Console.WriteLine($"❌ Failed: {failed}");
+            Console.WriteLine($"📈 Total:  {totalTests}");
+            Console.WriteLine($"⏱️  Duration: {totalDuration.TotalSeconds:F1}s");
+            Console.WriteLine();
+
+            if (failed > 0)
+            {
+                Console.WriteLine("❌ Failed Tests:");
+                foreach (var result in results.Where(r => !r.Passed))
+                {
+                    Console.WriteLine($"   • {result.Test.Name} ({result.Test.Category})");
+                    if (result.Exception != null)
+                    {
+                        Console.WriteLine($"     Error: {result.Exception.Message}");
+                    }
+                }
+
+                Console.WriteLine();
+            }
+
+            // Performance summary
+            Console.WriteLine("⚡ Performance Summary:");
+            var avgDuration = results.Average(r => r.Duration.TotalMilliseconds);
+            var slowestTest = results.OrderByDescending(r => r.Duration).First();
+            var fastestTest = results.OrderBy(r => r.Duration).First();
+
+            Console.WriteLine($"   Average: {avgDuration:F0}ms per test");
+            Console.WriteLine($"   Slowest: {slowestTest.Test.Name} ({slowestTest.Duration.TotalMilliseconds:F0}ms)");
+            Console.WriteLine($"   Fastest: {fastestTest.Test.Name} ({fastestTest.Duration.TotalMilliseconds:F0}ms)");
+
+            var successRate = (passed / (double)totalTests) * 100;
+            Console.WriteLine($"   Success Rate: {successRate:F1}%");
+        }
+
         private List<ISimConnectTest> FilterTests(TestOptions options)
         {
             if (!options.Categories.Any())
@@ -250,49 +295,6 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     Exception = ex,
                 };
             }
-        }
-
-        private static void PrintTestSummary(List<TestResult> results, TimeSpan totalDuration)
-        {
-            var passed = results.Count(r => r.Passed);
-            var failed = results.Count(r => !r.Passed);
-            var totalTests = results.Count;
-
-            Console.WriteLine("📊 Test Results Summary");
-            Console.WriteLine("========================");
-            Console.WriteLine($"✅ Passed: {passed}");
-            Console.WriteLine($"❌ Failed: {failed}");
-            Console.WriteLine($"📈 Total:  {totalTests}");
-            Console.WriteLine($"⏱️  Duration: {totalDuration.TotalSeconds:F1}s");
-            Console.WriteLine();
-
-            if (failed > 0)
-            {
-                Console.WriteLine("❌ Failed Tests:");
-                foreach (var result in results.Where(r => !r.Passed))
-                {
-                    Console.WriteLine($"   • {result.Test.Name} ({result.Test.Category})");
-                    if (result.Exception != null)
-                    {
-                        Console.WriteLine($"     Error: {result.Exception.Message}");
-                    }
-                }
-
-                Console.WriteLine();
-            }
-
-            // Performance summary
-            Console.WriteLine("⚡ Performance Summary:");
-            var avgDuration = results.Average(r => r.Duration.TotalMilliseconds);
-            var slowestTest = results.OrderByDescending(r => r.Duration).First();
-            var fastestTest = results.OrderBy(r => r.Duration).First();
-
-            Console.WriteLine($"   Average: {avgDuration:F0}ms per test");
-            Console.WriteLine($"   Slowest: {slowestTest.Test.Name} ({slowestTest.Duration.TotalMilliseconds:F0}ms)");
-            Console.WriteLine($"   Fastest: {fastestTest.Test.Name} ({fastestTest.Duration.TotalMilliseconds:F0}ms)");
-
-            var successRate = (passed / (double)totalTests) * 100;
-            Console.WriteLine($"   Success Rate: {successRate:F1}%");
         }
 
         private class TestOptions

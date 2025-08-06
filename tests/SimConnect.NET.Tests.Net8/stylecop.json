@@ -2,8 +2,8 @@
     "$schema": "https://raw.githubusercontent.com/DotNetAnalyzers/StyleCopAnalyzers/master/StyleCop.Analyzers/StyleCop.Analyzers/Settings/stylecop.schema.json",
     "settings": {
         "documentationRules": {
-            "companyName": "AussieScorcher",
-            "copyrightText": "Copyright (c) AussieScorcher. All rights reserved.",
+            "companyName": "BARS",
+            "copyrightText": "Copyright (c) BARS. All rights reserved.",
             "xmlHeader": true,
             "documentInterfaces": true,
             "documentExposedElements": true,

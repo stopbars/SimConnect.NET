@@ -1,5 +1,5 @@
-// <copyright file="PerformanceTests.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="PerformanceTests.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 using System.Diagnostics;

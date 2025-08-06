@@ -1,12 +1,15 @@
-// <copyright file="SimConnectFacilityMinimal.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectFacilityMinimal.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
+
+using System.Runtime.InteropServices;
 
 namespace SimConnect.NET
 {
     /// <summary>
     /// Represents minimal information about a facility.
     /// </summary>
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct SimConnectFacilityMinimal
     {
         /// <summary>

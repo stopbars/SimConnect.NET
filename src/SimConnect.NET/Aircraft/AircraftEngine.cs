@@ -1,5 +1,5 @@
-// <copyright file="AircraftEngine.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="AircraftEngine.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET.Aircraft

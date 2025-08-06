@@ -29,7 +29,7 @@ The client runs a background message loop (`StartMessageProcessingLoopAsync`) wi
 -   All public members require XML documentation with company copyright headers
 -   Using directives outside namespace, newline at EOF required
 -   `TreatWarningsAsErrors=true` in all projects except tests
--   File headers: `// <copyright file="FileName.cs" company="AussieScorcher">`
+-   File headers: `// <copyright file="FileName.cs" company="BARS">`
 
 ### Async Patterns
 

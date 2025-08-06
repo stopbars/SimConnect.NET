@@ -1,5 +1,5 @@
-// <copyright file="SimConnectRecvEnumerateInputEventParams.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectRecvEnumerateInputEventParams.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET
@@ -23,6 +23,11 @@ namespace SimConnect.NET
         /// Gets or sets the ID of the returned structure.
         /// </summary>
         public uint Id { get; set; }
+
+        /// <summary>
+        /// Gets or sets the client-defined request ID.
+        /// </summary>
+        public uint RequestId { get; set; }
 
         /// <summary>
         /// Gets or sets the hash ID that identifies the input event.

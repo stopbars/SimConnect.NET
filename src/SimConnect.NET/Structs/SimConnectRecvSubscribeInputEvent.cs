@@ -1,5 +1,5 @@
-// <copyright file="SimConnectRecvSubscribeInputEvent.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectRecvSubscribeInputEvent.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET
@@ -37,6 +37,6 @@ namespace SimConnect.NET
         /// <summary>
         /// Gets or sets the value of the requested input event, which should be cast to the correct format (e.g., float or string).
         /// </summary>
-        public object Value { get; set; }
+        public IntPtr Value { get; set; }
     }
 }

@@ -1,5 +1,5 @@
-// <copyright file="SimConnectNative.cs" company="AussieScorcher">
-// Copyright (c) AussieScorcher. All rights reserved.
+// <copyright file="SimConnectNative.cs" company="BARS">
+// Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 #pragma warning disable SA1202 // Elements should be ordered by access
@@ -362,13 +362,13 @@ namespace SimConnect.NET
             uint defineID);
 
         [DllImport("SimConnect.dll")]
-        public static extern int SimConnect_RequestFacilitesList(
+        public static extern int SimConnect_RequestFacilitiesList(
             IntPtr hSimConnect,
             uint type,
             uint requestID);
 
         [DllImport("SimConnect.dll")]
-        public static extern int SimConnect_RequestFacilitesList_EX1(
+        public static extern int SimConnect_RequestFacilitiesList_EX1(
             IntPtr hSimConnect,
             uint type,
             uint requestID);
