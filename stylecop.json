@@ -1,0 +1,19 @@
+{
+    "$schema": "https://raw.githubusercontent.com/DotNetAnalyzers/StyleCopAnalyzers/master/StyleCop.Analyzers/StyleCop.Analyzers/Settings/stylecop.schema.json",
+    "settings": {
+        "documentationRules": {
+            "companyName": "BARS",
+            "copyrightText": "Copyright (c) BARS. All rights reserved.",
+            "xmlHeader": true,
+            "documentInterfaces": true,
+            "documentExposedElements": true,
+            "documentInternalElements": false
+        },
+        "layoutRules": {
+            "newlineAtEndOfFile": "require"
+        },
+        "orderingRules": {
+            "usingDirectivesPlacement": "outsideNamespace"
+        }
+    }
+}

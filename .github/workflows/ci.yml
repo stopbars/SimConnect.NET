@@ -10,13 +10,50 @@ jobs:
     build:
         runs-on: ubuntu-latest
 
+        outputs:
+            version-changed: ${{ steps.version-check.outputs.changed }}
+            version: ${{ steps.version-check.outputs.version }}
+
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
             - name: Setup .NET SDK
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: "9.0.x"
+
+            - name: Check version change
+              id: version-check
+              run: |
+                  # Get current version from Directory.Build.props
+                  CURRENT_VERSION=$(grep -oP '<Version>\K[^<]+' Directory.Build.props)
+                  echo "Current version: $CURRENT_VERSION"
+                  echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+                  # Check if this is the first commit or if version changed
+                  if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                      git checkout HEAD~1 -- Directory.Build.props 2>/dev/null || echo "No previous version of Directory.Build.props"
+                      if [ -f Directory.Build.props ]; then
+                          PREVIOUS_VERSION=$(grep -oP '<Version>\K[^<]+' Directory.Build.props)
+                          echo "Previous version: $PREVIOUS_VERSION"
+                          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+                              echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+                              echo "changed=true" >> $GITHUB_OUTPUT
+                          else
+                              echo "Version unchanged"
+                              echo "changed=false" >> $GITHUB_OUTPUT
+                          fi
+                      else
+                          echo "No previous Directory.Build.props found, treating as version change"
+                          echo "changed=true" >> $GITHUB_OUTPUT
+                      fi
+                      git checkout HEAD -- Directory.Build.props
+                  else
+                      echo "First commit, treating as version change"
+                      echo "changed=true" >> $GITHUB_OUTPUT
+                  fi
 
             - name: Restore dependencies
               run: dotnet restore
@@ -32,3 +69,28 @@ jobs:
               with:
                   name: simconnectnet-packages
                   path: ./artifacts/*.nupkg
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.version-changed == 'true'
+
+        steps:
+            - name: Download package artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: simconnectnet-packages
+                  path: ./artifacts
+
+            - name: Setup .NET SDK
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: "9.0.x"
+
+            - name: Push to NuGet
+              run: |
+                  echo "Deploying version ${{ needs.build.outputs.version }} to NuGet"
+                  dotnet nuget push ./artifacts/*.nupkg \
+                      --api-key ${{ secrets.NUGET_PUSH_KEY }} \
+                      --source https://api.nuget.org/v3/index.json \
+                      --skip-duplicate

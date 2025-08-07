@@ -1,45 +1,35 @@
-# SimConnect.NET
+<img width="180" height="180" align="left" style="float: left; margin: 0 20px 0 0;" alt="SimConnect.NET Logo" src="logo.png" />
 
-🚧 **Work In Progress** 🚧
+<br>
 
-A simple async C# wrapper for Microsoft Flight Simulator's SimConnect SDK.
+**stopbars/SimConnect.NET**
 
-## What it does
+[![Github Issues](https://img.shields.io/github/issues/stopbars/SimConnect.NET)](https://github.com/stopbars/SimConnect.NET/repo)
+![GitHub License](https://img.shields.io/github/license/stopbars/SimConnect.NET)
+[![Discord](https://img.shields.io/discord/1323993176318414889.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://stopbars.com/discord)
 
--   Connect to Microsoft Flight Simulator
--   Read aircraft data (position, speed, altitude, etc.)
--   Set aircraft parameters
--   Create AI objects
+A modern, high-performance C# wrapper for Microsoft Flight Simulator's SimConnect SDK. It simplifies flight simulation development by providing async/await patterns and high-level abstractions, enabling real-time aircraft data monitoring, AI object management, and seamless integration with the simulator through a clean, type-safe API.
 
-## Quick Start
+> **⚠️ Beta Software Notice**  
+> SimConnect.NET is currently in beta development. APIs may change, features may be added or removed, and breaking changes are expected between releases. Use in production environments at your own discretion and always test thoroughly before deploying.
 
-```csharp
-var client = new SimConnectClient();
-await client.ConnectAsync();
+<br>
 
-// Get some aircraft data
-var altitude = await client.Aircraft.GetAltitudeAsync();
-var speed = await client.Aircraft.GetIndicatedAirspeedAsync();
+## Contributing
 
-await client.DisconnectAsync();
-```
+We encourage and appreciate contributions from the community! To get started, please review our [CONTRIBUTING.md](CONTRIBUTING.md) guide, which covers the following:
 
-## Status
+-   How to set up your development environment
+-   Code style guidelines and best practices
+-   Instructions for submitting pull requests
+-   Testing and verification procedures
 
--   ✅ Basic connection and data reading
--   ✅ Aircraft position and motion data
--   ✅ Full Simvar support
--   ⏳ Event handling
--   ⏳ Better error handling
--   ⏳ Documentation
+Your contributions directly support the ongoing development and improvement of BARS. By getting involved, you help us build a more robust, and feature-rich product that benefits the entire flight sim community.
 
-## Requirements
+## Bug Reports and Feature Requests
 
--   .NET 8.0 or 9.0
--   Microsoft Flight Simulator (for testing)
+If you find a bug or have a feature suggestion, please submit an issue [on our GitHub repository](https://github.com/stopbars/repo/issues/new). Please follow and fill in the issue template to the best of your ability to help us address your feedback efficiently.
 
-## Build
+## Disclaimer
 
-```bash
-dotnet build
-```
+BARS is an **independent third-party** software project. **We are not affiliated** with, endorsed by, or connected to VATSIM, vatSys, Microsoft Flight Simulator, or any other simulation, controller client supported by our software.
