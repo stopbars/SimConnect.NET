@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3-beta] - 2025-08-07
+
+### Added
+
+-   Enhanced build configuration for better debugging and CI/CD support
+-   Portable debug symbols generation for improved debugging experience
+-   Deterministic builds for reproducible packages
+-   Source linking support for better debugging in CI environments
+
+### Fixed
+
+-   Fixed package logo not being included (corrected filename from icon.png to logo.png)
+
+### Changed
+
+-   Enabled portable debug type and debug symbols for better debugging support
+-   Added deterministic build configuration for consistent package generation
+-   Configured continuous integration build detection for enhanced CI/CD workflows
+-   Added source root mapping for improved source linking in CI environments
+
 ## [0.1.2-beta] - 2025-08-07
 
 ### Changed
