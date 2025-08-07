@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1-beta] - 2025-08-07
+
+### Added
+
+-   NuGet-specific README.md for cleaner package documentation
+-   Improved package metadata and documentation
+
+### Changed
+
+-   Separated GitHub README from NuGet package README for better presentation
+
 ## [0.1.0-beta] - 2025-08-07
 
 ### Added

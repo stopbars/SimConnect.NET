@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>0.1.0-beta</Version>
+    <Version>0.1.1-beta</Version>
     <Authors>BARS</Authors>
     <Company>BARS</Company>
     <Product>SimConnect.NET</Product>
@@ -9,7 +9,7 @@
     <RepositoryUrl>https://github.com/stopbars/SimConnect.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/stopbars/SimConnect.NET</PackageProjectUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>flight-simulator;simconnect;msfs;flight-sim;aviation;simulation</PackageTags>
     <PackageReleaseNotes>See CHANGELOG.md or visit $(RepositoryUrl)/releases for release notes.</PackageReleaseNotes>
@@ -34,7 +34,7 @@
 
   <!-- Package content -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)README.nuget.md" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)LICENCE" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)CHANGELOG.md" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)SECURITY.md" Pack="true" PackagePath="\" />
