@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>0.1.1-beta</Version>
+    <Version>0.1.2-beta</Version>
     <Authors>BARS</Authors>
     <Company>BARS</Company>
     <Product>SimConnect.NET</Product>
@@ -12,7 +12,7 @@
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>flight-simulator;simconnect;msfs;flight-sim;aviation;simulation</PackageTags>
-    <PackageReleaseNotes>See CHANGELOG.md or visit $(RepositoryUrl)/releases for release notes.</PackageReleaseNotes>
+    <PackageReleaseNotes>See CHANGELOG.md for details.</PackageReleaseNotes>
     <PackageIcon Condition="Exists('$(MSBuildThisFileDirectory)icon.png')">icon.png</PackageIcon>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
