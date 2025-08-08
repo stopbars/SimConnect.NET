@@ -145,7 +145,7 @@ namespace SimConnect.NET.SimVar
                     var objectData = Marshal.PtrToStructure<SimConnectRecvSimObjectData>(data);
                     var requestId = objectData.RequestId;
 
-                    System.Diagnostics.Debug.WriteLine($"SimVar response received: RequestId={requestId}, DefineId={objectData.DefineId}, Size={recv.Size}");
+                    SimConnectLogger.Debug($"SimVar response received: RequestId={requestId}, DefineId={objectData.DefineId}, Size={recv.Size}");
 
                     if (this.pendingRequests.TryRemove(requestId, out var request))
                     {
@@ -154,14 +154,14 @@ namespace SimConnect.NET.SimVar
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"No pending request found for RequestId={requestId}");
+                        SimConnectLogger.Warning($"No pending request found for RequestId={requestId}");
                     }
                 }
             }
             catch (Exception ex)
             {
                 // Log error but don't throw - this shouldn't break the message processing loop
-                System.Diagnostics.Debug.WriteLine($"Error processing SimVar data: {ex.Message}");
+                SimConnectLogger.Error("Error processing SimVar data", ex);
             }
         }
 
@@ -344,7 +344,7 @@ namespace SimConnect.NET.SimVar
                 var headerSize = Marshal.SizeOf<SimConnectRecvSimObjectData>() - sizeof(ulong); // Subtract the Data field which is part of the actual data
                 var dataPtr = IntPtr.Add(data, headerSize);
 
-                System.Diagnostics.Debug.WriteLine($"Completing request for {definition.Name}, DataType={definition.DataType}, ValueType={valueType.Name}, HeaderSize={headerSize}");
+                SimConnectLogger.Debug($"Completing request for {definition.Name}, DataType={definition.DataType}, ValueType={valueType.Name}, HeaderSize={headerSize}");
 
                 // Parse the data based on the definition's data type
                 var parsedValue = ParseDataByType(dataPtr, definition.DataType, valueType);
@@ -354,7 +354,7 @@ namespace SimConnect.NET.SimVar
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error completing request: {ex.Message}");
+                SimConnectLogger.Error("Error completing request", ex);
                 var setExceptionMethod = requestType.GetMethod("SetException");
                 setExceptionMethod?.Invoke(request, new object[] { ex });
             }
@@ -470,7 +470,7 @@ namespace SimConnect.NET.SimVar
             var request = new SimVarRequest<T>(requestId, definition, objectId);
             this.pendingRequests[requestId] = request;
 
-            System.Diagnostics.Debug.WriteLine($"Making SimVar request: {definition.Name}, RequestId={requestId}, DefinitionId={definitionId}");
+            SimConnectLogger.Debug($"Making SimVar request: {definition.Name}, RequestId={requestId}, DefinitionId={definitionId}");
 
             try
             {
@@ -487,13 +487,13 @@ namespace SimConnect.NET.SimVar
                     throw new SimConnectException($"Failed to request SimVar {definition.Name}: {(SimConnectError)result}", (SimConnectError)result);
                 }
 
-                System.Diagnostics.Debug.WriteLine($"SimConnect_RequestDataOnSimObject succeeded for RequestId={requestId}");
+                SimConnectLogger.Debug($"SimConnect_RequestDataOnSimObject succeeded for RequestId={requestId}");
 
                 // Wait for the response with cancellation support
                 using (cancellationToken.Register(() => request.SetCanceled()))
                 {
                     var result_task = await request.Task.ConfigureAwait(false);
-                    System.Diagnostics.Debug.WriteLine($"SimVar request completed successfully: {definition.Name} = {result_task}");
+                    SimConnectLogger.Info($"SimVar request completed successfully: {definition.Name} = {result_task}");
                     return result_task;
                 }
             }
@@ -545,7 +545,7 @@ namespace SimConnect.NET.SimVar
 
             if (this.dataDefinitions.TryGetValue(key, out var existingId))
             {
-                System.Diagnostics.Debug.WriteLine($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
+                SimConnectLogger.Debug($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
                 return Task.FromResult(existingId);
             }
 
@@ -561,7 +561,7 @@ namespace SimConnect.NET.SimVar
                 }
 
                 var definitionId = Interlocked.Increment(ref this.nextDefinitionId);
-                System.Diagnostics.Debug.WriteLine($"Creating new definition ID {definitionId} for {key.Name}|{key.Unit}");
+                SimConnectLogger.Debug($"Creating new definition ID {definitionId} for {key.Name}|{key.Unit}");
 
                 var result = SimConnectNative.SimConnect_AddToDataDefinition(
                     this.simConnectHandle,

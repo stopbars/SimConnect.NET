@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4-beta] - 2025-08-08
+
+### Added
+
+-   SimConnectLogger: lightweight, async, file-based logger with severity levels; persists diagnostics under LocalAppData; optional debug mirroring
+-   SimConnectErrorMapper: descriptive mappings from native error codes to SimConnectError with helpers to wrap as SimConnectException; no runtime behavior changes
+
+### Changed
+
+-   Centralized logging across AI/SimObject, input events, SimVar, and core client (message dispatch/reconnect), replacing scattered Debug.WriteLine calls
+-   Level-appropriate messages to improve signal and reduce noise
+-   Error handling paths now route through SimConnectErrorMapper for consistent, actionable messages
+
+### Notes
+
+-   Focus on observability and diagnostics; no public API changes; non-breaking
+
 ## [0.1.3-beta] - 2025-08-07
 
 ### Added

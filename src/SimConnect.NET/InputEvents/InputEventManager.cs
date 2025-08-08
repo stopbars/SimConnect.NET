@@ -422,7 +422,7 @@ namespace SimConnect.NET.InputEvents
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing input event data: {ex.Message}");
+                SimConnectLogger.Error("Error processing input event data", ex);
             }
         }
 
@@ -524,7 +524,7 @@ namespace SimConnect.NET.InputEvents
                         }
                         catch (Exception itemEx)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Error parsing input event item {i}: {itemEx.Message}");
+                            SimConnectLogger.Warning($"Error parsing input event item {i}: {itemEx.Message}");
                             break; // Stop processing if we hit an error with an individual item
                         }
                     }
@@ -541,7 +541,7 @@ namespace SimConnect.NET.InputEvents
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing enumerate input events: {ex.Message}");
+                SimConnectLogger.Error("Error processing enumerate input events", ex);
 
                 // Try to complete any pending request with an empty array to prevent hanging
                 if (!this.pendingEnumerationRequests.IsEmpty)
@@ -569,7 +569,7 @@ namespace SimConnect.NET.InputEvents
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing enumerate input event params: {ex.Message}");
+                SimConnectLogger.Error("Error processing enumerate input event params", ex);
             }
         }
 
@@ -608,7 +608,7 @@ namespace SimConnect.NET.InputEvents
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing get input event: {ex.Message}");
+                SimConnectLogger.Error("Error processing get input event", ex);
             }
         }
 
@@ -651,7 +651,7 @@ namespace SimConnect.NET.InputEvents
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing subscribe input event: {ex.Message}");
+                SimConnectLogger.Error("Error processing subscribe input event", ex);
             }
         }
     }

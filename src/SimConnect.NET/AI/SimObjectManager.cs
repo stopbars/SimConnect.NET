@@ -3,7 +3,6 @@
 // </copyright>
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 
 namespace SimConnect.NET.AI
 {
@@ -83,7 +82,7 @@ namespace SimConnect.NET.AI
                         (SimConnectError)result);
                 }
 
-                Debug.WriteLine($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
+                SimConnectLogger.Debug($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
 
                 // Wait for the object creation to complete with shorter timeout
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -92,7 +91,7 @@ namespace SimConnect.NET.AI
                 var createdObject = await tcs.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
                 createdObject.UserData = userData;
 
-                Debug.WriteLine($"SimObjectManager: Successfully created object {createdObject}");
+                SimConnectLogger.Info($"SimObjectManager: Successfully created object {createdObject}");
                 return createdObject;
             }
             catch (OperationCanceledException)
@@ -123,7 +122,7 @@ namespace SimConnect.NET.AI
 
             if (!simObject.IsActive)
             {
-                Debug.WriteLine($"SimObjectManager: Object {simObject.ObjectId} is already inactive");
+                SimConnectLogger.Debug($"SimObjectManager: Object {simObject.ObjectId} is already inactive");
                 return Task.CompletedTask;
             }
 
@@ -146,7 +145,7 @@ namespace SimConnect.NET.AI
             simObject.IsActive = false;
             this.managedObjects.TryRemove(simObject.ObjectId, out _);
 
-            Debug.WriteLine($"SimObjectManager: Removed object {simObject}");
+            SimConnectLogger.Info($"SimObjectManager: Removed object {simObject}");
             return Task.CompletedTask;
         }
 
@@ -178,7 +177,7 @@ namespace SimConnect.NET.AI
 
             var objects = this.managedObjects.Values.Where(obj => obj.IsActive).ToList();
 
-            Debug.WriteLine($"SimObjectManager: Removing {objects.Count} active objects");
+            SimConnectLogger.Info($"SimObjectManager: Removing {objects.Count} active objects");
 
             var tasks = objects.Select(obj => this.RemoveObjectAsync(obj, cancellationToken));
             await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -225,11 +224,11 @@ namespace SimConnect.NET.AI
                 this.managedObjects[objectId] = simObject;
                 tcs.SetResult(simObject);
 
-                Debug.WriteLine($"SimObjectManager: Object creation completed - {simObject}");
+                SimConnectLogger.Info($"SimObjectManager: Object creation completed - {simObject}");
             }
             else
             {
-                Debug.WriteLine($"SimObjectManager: Received unexpected object creation for requestId {requestId}");
+                SimConnectLogger.Warning($"SimObjectManager: Received unexpected object creation for requestId {requestId}");
             }
         }
 
@@ -243,7 +242,7 @@ namespace SimConnect.NET.AI
             if (this.pendingCreations.TryRemove(requestId, out var tcs))
             {
                 tcs.SetException(new SimConnectException($"Object creation failed: {error}", error));
-                Debug.WriteLine($"SimObjectManager: Object creation failed for requestId {requestId}: {error}");
+                SimConnectLogger.Error($"SimObjectManager: Object creation failed for requestId {requestId}: {error}");
             }
         }
 
@@ -275,7 +274,7 @@ namespace SimConnect.NET.AI
 
                 this.managedObjects.Clear();
 
-                Debug.WriteLine("SimObjectManager: Disposed");
+                SimConnectLogger.Debug("SimObjectManager: Disposed");
             }
             finally
             {

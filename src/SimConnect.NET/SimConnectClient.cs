@@ -304,7 +304,7 @@ namespace SimConnect.NET
                 if (result != (int)SimConnectError.None)
                 {
                     // Log warning for non-zero close result, but don't throw
-                    System.Diagnostics.Debug.WriteLine($"Warning: SimConnect_Close returned error: {(SimConnectError)result}");
+                    SimConnectLogger.Warning($"SimConnect_Close returned error: {(SimConnectError)result}");
                 }
             }
         }
@@ -335,7 +335,7 @@ namespace SimConnect.NET
                         // Filter out the common "no messages available" error to reduce log spam
                         if (result != -2147467259)
                         {
-                            System.Diagnostics.Debug.WriteLine($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
+                            SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
                         }
 
                         return false;
@@ -345,7 +345,7 @@ namespace SimConnect.NET
                     {
                         var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
 
-                        System.Diagnostics.Debug.WriteLine($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
+                        SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
 
                         switch ((SimConnectRecvId)recv.Id)
                         {
@@ -436,11 +436,11 @@ namespace SimConnect.NET
                     string.Empty,
                     default(SimConnectDataInitPosition));
 
-                System.Diagnostics.Debug.WriteLine($"Processed assigned object ID: RequestId={recvAssignedObjectId.RequestId}, ObjectId={recvAssignedObjectId.ObjectId}");
+                SimConnectLogger.Info($"Processed assigned object ID: RequestId={recvAssignedObjectId.RequestId}, ObjectId={recvAssignedObjectId.ObjectId}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing assigned object ID: {ex.Message}");
+                SimConnectLogger.Error("Error processing assigned object ID", ex);
             }
         }
 
@@ -455,7 +455,7 @@ namespace SimConnect.NET
                 var recvError = Marshal.PtrToStructure<SimConnectRecvError>(ppData);
                 var error = (SimConnectError)recvError.ExceptionCode;
 
-                System.Diagnostics.Debug.WriteLine($"SimConnect error received: {error} (SendId={recvError.SendId}, Index={recvError.Index})");
+                SimConnectLogger.Warning($"SimConnect error received: {error} (SendId={recvError.SendId}, Index={recvError.Index})");
 
                 this.OnErrorOccurred(error, null, $"SimConnect error (SendId={recvError.SendId}, Index={recvError.Index})");
 
@@ -466,7 +466,7 @@ namespace SimConnect.NET
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error processing SimConnect error message: {ex.Message}");
+                SimConnectLogger.Error("Error processing SimConnect error message", ex);
                 this.OnErrorOccurred(SimConnectError.Error, ex, "Error processing SimConnect error message");
             }
         }
@@ -603,20 +603,20 @@ namespace SimConnect.NET
                     if (this.isConnected)
                     {
                         this.reconnectAttempts = 0;
-                        System.Diagnostics.Debug.WriteLine("Auto-reconnection successful");
+                        SimConnectLogger.Info("Auto-reconnection successful");
                         break;
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Auto-reconnection attempt {this.reconnectAttempts} failed: {ex.Message}");
+                    SimConnectLogger.Warning($"Auto-reconnection attempt {this.reconnectAttempts} failed: {ex.Message}");
                     this.OnErrorOccurred(SimConnectError.Error, ex, $"Auto-reconnection attempt {this.reconnectAttempts}");
                 }
             }
 
             if (this.reconnectAttempts >= this.MaxReconnectAttempts && !this.isConnected)
             {
-                System.Diagnostics.Debug.WriteLine("Auto-reconnection failed: Maximum attempts reached");
+                SimConnectLogger.Error("Auto-reconnection failed: Maximum attempts reached");
                 this.OnErrorOccurred(SimConnectError.Error, null, "Auto-reconnection failed: Maximum attempts reached");
             }
         }
