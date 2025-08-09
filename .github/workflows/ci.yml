@@ -98,4 +98,5 @@ jobs:
                   echo "Deploying version ${{ needs.build.outputs.version }} to NuGet"
                   dotnet nuget push ./artifacts/*.nupkg \
                       --api-key ${{ secrets.NUGET_PUSH_KEY }} \
-                      --source https://api.nuget.org/v3/index.json
+                      --source https://api.nuget.org/v3/index.json \
+                      --skip-duplicate
