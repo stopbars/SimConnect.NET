@@ -59,58 +59,31 @@
   </ItemGroup>
 
   <!-- Auto-derive package release notes from CHANGELOG.md -->
-  <Target Name="DerivePackageReleaseNotes" BeforeTargets="GenerateNuspec">
+  <Target Name="DerivePackageReleaseNotes" BeforeTargets="GenerateNuspec" Condition="Exists('$(MSBuildThisFileDirectory)CHANGELOG.md')">
     <ReadLinesFromFile File="$(MSBuildThisFileDirectory)CHANGELOG.md">
       <Output TaskParameter="Lines" ItemName="ChangelogLines" />
     </ReadLinesFromFile>
 
+    <!-- Find the first version header line (matches ## [0.1.5-beta] or ## 0.1.5) -->
     <ItemGroup>
-      <_FirstVersionHeader Include="@(ChangelogLines)"
-                           Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ChangelogLines.Identity)', '^(##\s+\[?\d+\.\d+\.\d+.*)'))" />
+      <_VersionHeaderLines Include="@(ChangelogLines)" 
+                           Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ChangelogLines.Identity)', '^##\s+\[.*\d+\.\d+\.\d+.*\]'))" />
     </ItemGroup>
 
+    <!-- Extract version number from the first header -->
     <PropertyGroup>
-      <_FirstVersionHeaderLine>@(_FirstVersionHeader->'%(Identity)')</_FirstVersionHeaderLine>
-      <PackageReleaseNotes Condition=" '$(PackageReleaseNotes)' == '' ">See CHANGELOG.md for details.</PackageReleaseNotes>
+      <_FirstHeader>@(_VersionHeaderLines->'%(Identity)', '')</_FirstHeader>
+      <_VersionMatch>$([System.Text.RegularExpressions.Regex]::Match('$(_FirstHeader)', '\[([^\]]+)\]'))</_VersionMatch>
+      <_ExtractedVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_VersionMatch)', '.*\[([^\]]+)\].*', '$1'))</_ExtractedVersion>
     </PropertyGroup>
 
-    <UsingTask TaskName="_ExtractReleaseNotes" TaskFactory="CodeTaskFactory" AssemblyName="Microsoft.Build.Tasks.Core">
-      <ParameterGroup>
-        <Lines ParameterType="System.String[]" Required="true" />
-        <Result Output="true" ParameterType="System.String" />
-      </ParameterGroup>
-      <Task>
-        <Reference Include="System.Core" />
-        <Code Type="Fragment" Language="cs"><![CDATA[
-          // Regex matches version headers like: ## 1.2.3, ## [1.2.3], ## [1.2.3-beta] - 2025-08-09
-          var headerRegex = new System.Text.RegularExpressions.Regex(@"^##\s+\[?\d+\.\d+\.\d+.*");
-          bool inBlock = false;
-          var sb = new System.Text.StringBuilder();
-          foreach (var line in Lines)
-          {
-            if (headerRegex.IsMatch(line))
-            {
-              if (inBlock) break; // reached next version header
-              inBlock = true;
-            }
-            if (inBlock) sb.AppendLine(line);
-          }
-          var text = sb.ToString().Trim();
-          // Sanity: avoid empty overwrite
-          Result = string.IsNullOrWhiteSpace(text) ? null : text;
-        ]]></Code>
-      </Task>
-    </UsingTask>
-
-    <_ExtractReleaseNotes Lines="@(ChangelogLines)">
-      <Output TaskParameter="Result" PropertyName="_DerivedReleaseNotes" />
-    </_ExtractReleaseNotes>
-
-    <PropertyGroup Condition=" '$(_DerivedReleaseNotes)' != '' ">
-      <PackageReleaseNotes>$(_DerivedReleaseNotes)</PackageReleaseNotes>
+    <!-- Set the package release notes -->
+    <PropertyGroup>
+      <PackageReleaseNotes Condition="'$(_ExtractedVersion)' != '' AND '$(_ExtractedVersion)' != '$(_FirstHeader)'">Release $(_ExtractedVersion) - See CHANGELOG.md for full details.</PackageReleaseNotes>
+      <PackageReleaseNotes Condition="'$(PackageReleaseNotes)' == ''">See CHANGELOG.md for details.</PackageReleaseNotes>
     </PropertyGroup>
 
-    <Message Importance="High" Text="[DerivePackageReleaseNotes] Using auto-derived notes: $([System.String]::Copy('$(PackageReleaseNotes)'))" Condition=" '$(_DerivedReleaseNotes)' != '' " />
-    <Message Importance="Low" Text="[DerivePackageReleaseNotes] Auto-derivation skipped (fallback retained)." Condition=" '$(_DerivedReleaseNotes)' == '' " />
+    <Message Importance="High" Text="[DerivePackageReleaseNotes] Auto-extracted version: '$(_ExtractedVersion)'" Condition="'$(_ExtractedVersion)' != '' AND '$(_ExtractedVersion)' != '$(_FirstHeader)'" />
+    <Message Importance="Low" Text="[DerivePackageReleaseNotes] Using fallback release notes. Header: '$(_FirstHeader)'" Condition="'$(_ExtractedVersion)' == '' OR '$(_ExtractedVersion)' == '$(_FirstHeader)'" />
   </Target>
 </Project>
