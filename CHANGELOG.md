@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6-beta] - 2025-08-09
+
+### Fixed
+
+-   Fixed auto-generated PackageReleaseNotes from CHANGELOG.md extraction (MSBuild target was not working correctly in previous release)
+
 ## [0.1.5-beta] - 2025-08-09
 
 ### Added
