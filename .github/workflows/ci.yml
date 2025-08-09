@@ -76,7 +76,7 @@ jobs:
     deploy:
         needs: build
         runs-on: ubuntu-latest
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.version-changed == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
         permissions:
             contents: read
