@@ -3,6 +3,7 @@
 // </copyright>
 
 using System.Collections.Concurrent;
+using SimConnect.NET.SimVar;
 
 namespace SimConnect.NET.AI
 {
@@ -206,6 +207,63 @@ namespace SimConnect.NET.AI
             return this.managedObjects.Values.Where(obj =>
                 obj.IsActive &&
                 string.Equals(obj.ContainerTitle, containerTitle, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Sets a SimVar value on a specific AI simulation object.
+        /// This is a convenience wrapper over <see cref="SimVarManager.SetAsync{T}(string, string, T, uint, System.Threading.CancellationToken)"/>.
+        /// </summary>
+        /// <typeparam name="T">The value type.</typeparam>
+        /// <param name="simObject">The target simulation object.</param>
+        /// <param name="simVarName">The SimVar name (e.g. "BARS_LIGHT_GREEN").</param>
+        /// <param name="unit">The SimVar unit (use an empty string for unit-less custom vars).</param>
+        /// <param name="value">The value to set.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the manager is disposed.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="simObject"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown if the object is inactive.</exception>
+        public Task SetDataAsync<T>(SimObject simObject, string simVarName, string unit, T value, CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimObjectManager));
+            ArgumentNullException.ThrowIfNull(simObject);
+            if (!simObject.IsActive)
+            {
+                throw new InvalidOperationException($"Cannot set data on inactive object {simObject.ObjectId}");
+            }
+
+            return this.client.SimVars.SetAsync(simVarName, unit, value, simObject.ObjectId, cancellationToken);
+        }
+
+        /// <summary>
+        /// Sets multiple SimVar values on an AI object concurrently for efficiency.
+        /// </summary>
+        /// <param name="simObject">The target simulation object.</param>
+        /// <param name="values">A collection of (Name, Unit, Value) tuples.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that completes when all values have been set.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the manager is disposed.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="simObject"/> or <paramref name="values"/> is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown if the object is inactive.</exception>
+        public Task SetDataBatchAsync(SimObject simObject, IEnumerable<(string Name, string Unit, object Value)> values, CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimObjectManager));
+            ArgumentNullException.ThrowIfNull(simObject);
+            ArgumentNullException.ThrowIfNull(values);
+            if (!simObject.IsActive)
+            {
+                throw new InvalidOperationException($"Cannot set data on inactive object {simObject.ObjectId}");
+            }
+
+            var tasks = values.Select(tuple =>
+            {
+                // Dynamically invoke generic method based on runtime type of value
+                var method = typeof(SimVarManager).GetMethod("SetAsync")!;
+                var generic = method.MakeGenericMethod(tuple.Value.GetType());
+                return (Task)generic.Invoke(this.client.SimVars, new object[] { tuple.Name, tuple.Unit, tuple.Value, simObject.ObjectId, cancellationToken })!;
+            });
+
+            return Task.WhenAll(tasks);
         }
 
         /// <summary>

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5-beta] - 2025-08-09
+
+### Added
+
+-   AI SimObject data setting: new `SimObjectManager.SetDataAsync<T>` for setting individual SimVars on spawned AI objects (e.g. custom visibility toggles like `BARS_LIGHT_GREEN`)
+-   Batch setting support via `SimObjectManager.SetDataBatchAsync` to concurrently push multiple SimVar values to an AI object for lower latency updates
+-   Automated packaging: NuGet PackageReleaseNotes now auto-derived from the latest version section of CHANGELOG.md via MSBuild target `DerivePackageReleaseNotes`.
+
+### Notes
+
+-   Non-breaking additive API; leverages existing dynamic SimVar definition caching. Pass an empty unit string for unit-less custom vars. Inactive objects throw `InvalidOperationException` to prevent silent failures.
+
 ## [0.1.4-beta] - 2025-08-08
 
 ### Added
