@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-  <Version>0.1.6-beta</Version>
+    <Version>0.1.6-beta</Version>
     <Authors>BARS</Authors>
     <Company>BARS</Company>
     <Product>SimConnect.NET</Product>
@@ -27,14 +27,12 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
-  <!-- Security and signing -->
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
     <DelaySign>false</DelaySign>
     <PublicSign>false</PublicSign>
   </PropertyGroup>
 
-  <!-- Package content -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)README.nuget.md" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)LICENCE" Pack="true" PackagePath="\" />
@@ -43,7 +41,6 @@
     <None Include="$(MSBuildThisFileDirectory)logo.png" Pack="true" PackagePath="\" Condition="Exists('$(MSBuildThisFileDirectory)logo.png')" />
   </ItemGroup>
 
-  <!-- StyleCop configuration -->
   <ItemGroup>
     <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.435" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
@@ -53,55 +50,24 @@
     <SourceRoot Include="$(MSBuildThisFileDirectory)/" />
   </ItemGroup>
 
-  <!-- Global analyzer config -->
   <ItemGroup>
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)stylecop.json" Link="stylecop.json" />
   </ItemGroup>
 
-  <!-- Auto-derive package release notes from CHANGELOG.md -->
-  <Target Name="DerivePackageReleaseNotes" BeforeTargets="GenerateNuspec" Condition="Exists('$(MSBuildThisFileDirectory)CHANGELOG.md')">
-    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)CHANGELOG.md">
-      <Output TaskParameter="Lines" ItemName="ChangelogLines" />
-    </ReadLinesFromFile>
-
-    <!-- Create a temporary PowerShell script file -->
+  <Target Name="DerivePackageReleaseNotes" BeforeTargets="GenerateNuspec">
     <PropertyGroup>
-      <_TempScriptPath>$(MSBuildThisFileDirectory)temp_extract_changelog.ps1</_TempScriptPath>
+      <_ChangelogPath>$(MSBuildThisFileDirectory)CHANGELOG.md</_ChangelogPath>
     </PropertyGroup>
-
-    <WriteLinesToFile File="$(_TempScriptPath)" Lines="
-      param($version, $changelogPath)
-      $content = Get-Content $changelogPath -Raw
-      $pattern = '(?ms)^##\s+\[' + [regex]::Escape($version) + '\].*?(?=^##\s+\[|\z)'
-      $match = [regex]::Match($content, $pattern)
-      if ($match.Success) {
-        $lines = $match.Value -split '\r?\n'
-        $contentLines = $lines | Where-Object { $_ -notmatch '^##\s+\[.*\]' -and $_ -match '\S' } | Select-Object -First 15
-        $result = $contentLines -join [Environment]::NewLine
-        if ($result.Trim()) {
-          Write-Output $result.Trim()
-        } else {
-          Write-Output 'See CHANGELOG.md for details.'
-        }
-      } else {
-        Write-Output 'See CHANGELOG.md for details.'
-      }
-      " Overwrite="true" />
-
-    <!-- Execute the PowerShell script -->
-    <Exec Command="powershell -ExecutionPolicy Bypass -File &quot;$(_TempScriptPath)&quot; &quot;$(Version)&quot; &quot;$(MSBuildThisFileDirectory)CHANGELOG.md&quot;" ConsoleToMSBuild="true" IgnoreExitCode="true">
-      <Output TaskParameter="ConsoleOutput" PropertyName="_ExtractedNotes" />
-    </Exec>
-
-    <!-- Clean up the temporary script -->
-    <Delete Files="$(_TempScriptPath)" />
-
-    <!-- Set the package release notes -->
-    <PropertyGroup>
-      <PackageReleaseNotes>$(_ExtractedNotes)</PackageReleaseNotes>
-      <PackageReleaseNotes Condition="'$(PackageReleaseNotes)' == ''">See CHANGELOG.md for details.</PackageReleaseNotes>
+    <PropertyGroup Condition="Exists('$(_ChangelogPath)')">
+      <_ChangelogContent>$([System.IO.File]::ReadAllText('$(_ChangelogPath)'))</_ChangelogContent>
+      <_EscapedVersion>$([System.Text.RegularExpressions.Regex]::Escape('$(Version)'))</_EscapedVersion>
+      <_Pattern>## \[$(_EscapedVersion)\][^\n\r]*\r?\n(?&lt;body&gt;.*?)(\r?\n## \[|$)</_Pattern>
+      <_Body>$([System.Text.RegularExpressions.Regex]::Match($(_ChangelogContent), $(_Pattern), System.Text.RegularExpressions.RegexOptions.Singleline).Groups['body'].Value)</_Body>
+      <_Body>$(_Body.Trim())</_Body>
     </PropertyGroup>
-
-    <Message Importance="High" Text="[DerivePackageReleaseNotes] Extracted release notes for version $(Version): $(PackageReleaseNotes)" />
+    <PropertyGroup Condition="'$(_Body)' != ''">
+      <PackageReleaseNotes>$(_Body)</PackageReleaseNotes>
+    </PropertyGroup>
+    <Message Importance="High" Text="[DerivePackageReleaseNotes] Release notes resolved: $([System.String]::Copy('$(PackageReleaseNotes)'))" />
   </Target>
 </Project>
