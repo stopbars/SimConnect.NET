@@ -23,9 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="lib\SimConnect.dll">
+    <Content Include="lib\SimConnect.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <Pack>true</Pack>
+      <PackagePath>runtimes/win-x64/native</PackagePath>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

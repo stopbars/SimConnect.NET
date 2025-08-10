@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7-beta] - 2025-08-10
+
+### Added
+
+-   Packaged native `SimConnect.dll` inside the NuGet under `runtimes/win-x64/native`, enabling automatic deployment of the unmanaged dependency.
+
+### Changed
+
+-   Updated project file to treat `lib/SimConnect.dll` as packed content (`Content` with `<Pack>true</Pack>` and RID-specific package path) instead of a build-only copy item.
+
+### Notes
+
+-   Fixes `DllNotFoundException` (`Unable to load DLL 'SimConnect.dll'`) encountered by consumers of previous versions unless they manually supplied the DLL.
+-   If you previously worked around the issue by copying the DLL manually, you can remove that step after upgrading.
+-   Architecture currently targets Windows x64 (MSFS is x64); additional RIDs can be added in future if needed.
+
 ## [0.1.6-beta.1] - 2025-08-09
 
 ### Fixed
