@@ -62,6 +62,13 @@ namespace SimConnect.NET
         public event EventHandler<SimConnectErrorEventArgs>? ErrorOccurred;
 
         /// <summary>
+        /// Occurs when any raw SimConnect message is received before it is dispatched to managers.
+        /// Allows advanced consumers to inspect or override low-level processing.
+        /// The underlying memory pointed to by <see cref="RawSimConnectMessageEventArgs.DataPointer"/> is only valid for the duration of the event callback.
+        /// </summary>
+        public event EventHandler<RawSimConnectMessageEventArgs>? RawMessageReceived;
+
+        /// <summary>
         /// Gets a value indicating whether the client is connected to SimConnect.
         /// </summary>
         public bool IsConnected => this.isConnected;
@@ -170,7 +177,7 @@ namespace SimConnect.NET
         /// Gets the SimConnect handle for advanced operations.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
-        internal IntPtr Handle
+        public IntPtr Handle
         {
             get
             {
@@ -344,10 +351,20 @@ namespace SimConnect.NET
                     if (ppData != IntPtr.Zero && pcbData > 0)
                     {
                         var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
+                        var recvId = (SimConnectRecvId)recv.Id;
 
                         SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
 
-                        switch ((SimConnectRecvId)recv.Id)
+                        try
+                        {
+                            this.RawMessageReceived?.Invoke(this, new RawSimConnectMessageEventArgs(ppData, pcbData, recvId));
+                        }
+                        catch (Exception hookEx)
+                        {
+                            SimConnectLogger.Warning($"RawMessageReceived hook threw: {hookEx.Message}");
+                        }
+
+                        switch (recvId)
                         {
                             case SimConnectRecvId.AssignedObjectId:
                                 this.ProcessAssignedObjectId(ppData);

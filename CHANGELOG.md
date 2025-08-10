@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8-beta] - 2025-08-10
+
+### Added
+
+-   Public `SimConnectClient.Handle` property (was internal) to allow advanced consumers to perform custom native interop scenarios not yet wrapped by the library.
+-   `SimConnectClient.RawMessageReceived` event exposing a low-level hook with raw pointer, size, and message id for diagnostics, custom decoding, or experimentation with unwrapped message types.
+
+### Notes
+
+-   Raw message memory is only valid for the duration of the event callback; copy data immediately if you need to retain it.
+-   This is an additive, non-breaking update.
+
 ## [0.1.7-beta] - 2025-08-10
 
 ### Added
