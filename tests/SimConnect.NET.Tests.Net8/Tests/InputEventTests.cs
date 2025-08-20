@@ -172,6 +172,11 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     {
                         await TestStringValueOperations(client, testEvent.Hash, currentValue, cancellationToken);
                     }
+                    else
+                    {
+                        Console.WriteLine($"      ❌ Input event test failed: Current value type unknown");
+                        return false;
+                    }
 
                     return true;
                 }
