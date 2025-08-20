@@ -32,8 +32,8 @@ SimConnect.NET is currently in beta development. APIs may change, features may b
     await client.ConnectAsync();
 
     // Get aircraft data
-    var altitude = await client.SimVarManager.GetAsync<double>("PLANE ALTITUDE", "feet");
-    var airspeed = await client.SimVarManager.GetAsync<double>("AIRSPEED INDICATED", "knots");
+    var altitude = await client.SimVars.GetAsync<double>("PLANE ALTITUDE", "feet");
+    var airspeed = await client.SimVars.GetAsync<double>("AIRSPEED INDICATED", "knots");
 
     Console.WriteLine($"Altitude: {altitude:F0} ft");
     Console.WriteLine($"Airspeed: {airspeed:F0} kts");
