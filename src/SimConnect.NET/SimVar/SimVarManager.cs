@@ -27,6 +27,7 @@ namespace SimConnect.NET.SimVar
         private uint nextDefinitionId;
         private uint nextRequestId;
         private bool disposed;
+        private TimeSpan requestTimeout = TimeSpan.FromSeconds(10);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SimVarManager"/> class.
@@ -39,6 +40,24 @@ namespace SimConnect.NET.SimVar
             this.dataDefinitions = new ConcurrentDictionary<(string, string), uint>();
             this.nextDefinitionId = BaseDefinitionId;
             this.nextRequestId = BaseRequestId;
+        }
+
+        /// <summary>
+        /// Gets or sets the default timeout applied to SimVar requests that do not complete.
+        /// Defaults to 10 seconds. Set to <see cref="Timeout.InfiniteTimeSpan"/> to disable.
+        /// </summary>
+        public TimeSpan RequestTimeout
+        {
+            get => this.requestTimeout;
+            set
+            {
+                if (value < Timeout.InfiniteTimeSpan)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value), "Timeout must be non-negative or Timeout.InfiniteTimeSpan");
+                }
+
+                this.requestTimeout = value;
+            }
         }
 
         /// <summary>
@@ -492,7 +511,19 @@ namespace SimConnect.NET.SimVar
                 // Wait for the response with cancellation support
                 using (cancellationToken.Register(() => request.SetCanceled()))
                 {
-                    var result_task = await request.Task.ConfigureAwait(false);
+                    Task<T> taskToAwait = request.Task;
+                    if (this.requestTimeout != Timeout.InfiniteTimeSpan)
+                    {
+                        var timeoutTask = Task.Delay(this.requestTimeout, CancellationToken.None);
+                        var completed = await Task.WhenAny(taskToAwait, timeoutTask).ConfigureAwait(false);
+                        if (completed == timeoutTask)
+                        {
+                            this.pendingRequests.TryRemove(requestId, out _);
+                            request.SetException(new TimeoutException($"SimVar request '{definition.Name}' timed out after {this.requestTimeout} (RequestId={requestId})"));
+                        }
+                    }
+
+                    var result_task = await taskToAwait.ConfigureAwait(false);
                     SimConnectLogger.Info($"SimVar request completed successfully: {definition.Name} = {result_task}");
                     return result_task;
                 }

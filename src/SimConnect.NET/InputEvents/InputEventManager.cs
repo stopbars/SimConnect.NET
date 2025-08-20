@@ -362,6 +362,100 @@ namespace SimConnect.NET.InputEvents
         }
 
         /// <summary>
+        /// Transmits a client event with an optional 32-bit data value to the simulation or other SimConnect clients.
+        /// </summary>
+        /// <param name="objectId">Target object ID (use 0 for user aircraft or broadcast semantics).</param>
+        /// <param name="eventId">The mapped client event ID.</param>
+        /// <param name="data">Optional data value (DWORD) required by some events.</param>
+        /// <param name="groupId">Notification group ID or priority if <paramref name="options"/> includes <see cref="SimConnectEventOptions.GroupIdIsPriority"/>.</param>
+        /// <param name="options">Event transmission options.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <exception cref="SimConnectException">Thrown if native call fails.</exception>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        public async Task TransmitClientEventAsync(
+            uint objectId,
+            uint eventId,
+            uint data = 0,
+            uint groupId = 0,
+            SimConnectEventOptions options = SimConnectEventOptions.None,
+            CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await Task.Run(
+                () =>
+            {
+                var result = SimConnectNative.SimConnect_TransmitClientEvent(
+                    this.simConnectHandle,
+                    objectId,
+                    eventId,
+                    data,
+                    groupId,
+                    (uint)options);
+
+                if (result != (int)SimConnectError.None)
+                {
+                    throw new SimConnectException($"Failed to transmit client event: {(SimConnectError)result}", (SimConnectError)result);
+                }
+            },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Transmits a client event (EX1 variant) with up to five 32-bit data parameters.
+        /// </summary>
+        /// <param name="objectId">Target object ID.</param>
+        /// <param name="eventId">The mapped client event ID.</param>
+        /// <param name="groupId">Notification group ID or priority when using <see cref="SimConnectEventOptions.GroupIdIsPriority"/>.</param>
+        /// <param name="options">Event transmission options.</param>
+        /// <param name="data0">First data parameter.</param>
+        /// <param name="data1">Second data parameter.</param>
+        /// <param name="data2">Third data parameter.</param>
+        /// <param name="data3">Fourth data parameter.</param>
+        /// <param name="data4">Fifth data parameter.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <exception cref="SimConnectException">Thrown if native call fails.</exception>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        public async Task TransmitClientEventEx1Async(
+            uint objectId,
+            uint eventId,
+            uint groupId,
+            SimConnectEventOptions options = SimConnectEventOptions.None,
+            uint data0 = 0,
+            uint data1 = 0,
+            uint data2 = 0,
+            uint data3 = 0,
+            uint data4 = 0,
+            CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await Task.Run(
+                () =>
+            {
+                var result = SimConnectNative.SimConnect_TransmitClientEvent_EX1(
+                    this.simConnectHandle,
+                    objectId,
+                    eventId,
+                    groupId,
+                    (uint)options,
+                    data0,
+                    data1,
+                    data2,
+                    data3,
+                    data4);
+
+                if (result != (int)SimConnectError.None)
+                {
+                    throw new SimConnectException($"Failed to transmit client event (EX1): {(SimConnectError)result}", (SimConnectError)result);
+                }
+            },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Disposes the InputEventManager and releases resources.
         /// </summary>
         public void Dispose()

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9-beta] - 2025-08-20
+
+### Added
+
+-   Client event transmission support via `InputEventManager.TransmitClientEventAsync` and `TransmitClientEventEx1Async`, including new `SimConnectEventOptions` enum.
+
+### Changed
+
+-   NuGet README sample updated (`SimVarManager` usage now accessed via shorthand `SimVars` property):
+    -   `var altitude = await client.SimVarManager.GetAsync<double>("PLANE ALTITUDE", "feet");` → `var altitude = await client.SimVars.GetAsync<double>("PLANE ALTITUDE", "feet");`
+    -   `var airspeed = await client.SimVarManager.GetAsync<double>("AIRSPEED INDICATED", "knots");` → `var airspeed = await client.SimVars.GetAsync<double>("AIRSPEED INDICATED", "knots");`
+
+### Fixed
+
+-   Improved test feedback: `TestInputEventGetSet` now detects and reports an unknown/none value type instead of failing silently (added explicit failure branch when the current value type is `None`). This aids diagnosing aircraft-specific input event behavior (e.g., C172, SR22T).
+
+-   SimVar request timeout handling: added `SimVarManager.RequestTimeout` (default 10s) to properly fail stalled requests instead of hanging performance/stress tests. Requests now throw `TimeoutException` when exceeded.
+
 ## [0.1.8-beta] - 2025-08-10
 
 ### Added
