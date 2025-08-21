@@ -1,35 +1,41 @@
-<img width="180" height="180" align="left" style="float: left; margin: 0 20px 0 0;" alt="SimConnect.NET Logo" src="logo.png" />
+<p align="center">
+  <p align="center">
+   <img width="150" height="150" src="logo.png" alt="Logo">
+  </p>
+	<h1 align="center"><b>stopbars/SimConnect.NET</b></h1>
+	<p align="center">
+    <br />
+		A modern, high-performance C# wrapper for Microsoft Flight Simulator's SimConnect SDK. It simplifies flight simulation development by providing async/await patterns and high-level abstractions, enabling real-time aircraft data monitoring, AI object management,           and seamless integration with the simulator through a clean, type-safe API.
+    <br />
+    <br />
+    <a href="https://stopbars.com"><strong>stopbars.com »</strong></a>
+    <br />
+  </p>
+</p>
 
-<br>
-
-**stopbars/SimConnect.NET**
-
-[![Github Issues](https://img.shields.io/github/issues/stopbars/SimConnect.NET)](https://github.com/stopbars/SimConnect.NET/repo)
-![GitHub License](https://img.shields.io/github/license/stopbars/SimConnect.NET)
-[![Discord](https://img.shields.io/discord/1323993176318414889.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://stopbars.com/discord)
-
-A modern, high-performance C# wrapper for Microsoft Flight Simulator's SimConnect SDK. It simplifies flight simulation development by providing async/await patterns and high-level abstractions, enabling real-time aircraft data monitoring, AI object management, and seamless integration with the simulator through a clean, type-safe API.
+<p align="center">
+  <br />
+  <a href="https://stopbars.com/discord" target="_blank" rel="noopener noreferrer">
+	<img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white" alt="Discord">
+  </a>
+  <a href="https://opencollective.com/stopbars">
+    <img src="https://img.shields.io/static/v1?label=&message=Open%20Collective&color=297EF2&logo=opencollective&logoColor=white" />
+  </a>
+  <a href="https://opensource.org/license/mit">
+    <img src="https://img.shields.io/static/v1?label=Licence&message=MIT&color=000" />
+  </a>
+  <br />
+</p>
 
 > **⚠️ Beta Software Notice**  
 > SimConnect.NET is currently in beta development. APIs may change, features may be added or removed, and breaking changes are expected between releases. Use in production environments at your own discretion and always test thoroughly before deploying.
 
-<br>
-
 ## Contributing
 
-We encourage and appreciate contributions from the community! To get started, please review our [CONTRIBUTING.md](CONTRIBUTING.md) guide, which covers the following:
+We encourage and appreciate contributions from the community! To get started, please review our [CONTRIBUTING.md](CONTRIBUTING.md) guide, which covers how to set up your development environment, code style guidelines and best practices, instructions for submitting pull requests, and testing and verification procedures.
 
--   How to set up your development environment
--   Code style guidelines and best practices
--   Instructions for submitting pull requests
--   Testing and verification procedures
-
-Your contributions directly support the ongoing development and improvement of BARS. By getting involved, you help us build a more robust, and feature-rich product that benefits the entire flight sim community.
-
-## Bug Reports and Feature Requests
-
-If you find a bug or have a feature suggestion, please submit an issue [on our GitHub repository](https://github.com/stopbars/repo/issues/new). Please follow and fill in the issue template to the best of your ability to help us address your feedback efficiently.
+Your contributions directly support the ongoing development and improvement of BARS. By getting involved, you help us build a more robust, and feature-rich product that benefits the entire flight sim community. All contributors are acknowledged on our [credits page](https://stopbars.com/credits).
 
 ## Disclaimer
 
-BARS is an **independent third-party** software project. **We are not affiliated** with, endorsed by, or connected to VATSIM, vatSys, Microsoft Flight Simulator, or any other simulation, controller client supported by our software.
+BARS is an **independent third-party** software project. **We are not affiliated** with, **endorsed by**, or **connected to** VATSIM, vatSys, EuroScope, Microsoft Flight Simulator, or any other simulation, controller client supported by our software.
