@@ -2,32 +2,55 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
+using System;
+using System.Runtime.InteropServices;
+
 namespace SimConnect.NET
 {
     /// <summary>
-    /// The SimConnectRecvOpen structure is used to return information to the client after a successful call to SimConnect_Open.
+    /// Represents the data returned by SimConnect immediately after a successful call to SimConnect_Open (SIMCONNECT_RECV_OPEN).
     /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     public struct SimConnectRecvOpen
     {
+        /// <summary>
+        /// Backing fixed-size ANSI byte buffer for the application name (256 bytes defined by the native SDK).
+        /// </summary>
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
+        private byte[] applicationNameBytes;
+
         /// <summary>
         /// Gets or sets the total size of the returned structure in bytes.
         /// </summary>
         public uint Size { get; set; }
 
         /// <summary>
-        /// Gets or sets the version number of the SimConnect server.
+        /// Gets or sets the version number of the SimConnect server (internal use).
         /// </summary>
         public uint Version { get; set; }
 
         /// <summary>
-        /// Gets or sets the ID of the returned structure.
+        /// Gets or sets the ID of the returned structure (should be <see cref="SimConnectRecvId.Open"/>).
         /// </summary>
         public uint Id { get; set; }
 
         /// <summary>
-        /// Gets or sets the null-terminated string containing the application name.
+        /// Gets the null-terminated simulator application name string.
         /// </summary>
-        public string ApplicationName { get; set; }
+        public readonly string? ApplicationName
+        {
+            get
+            {
+                if (this.applicationNameBytes == null)
+                {
+                    return null;
+                }
+
+                var nullIndex = Array.IndexOf(this.applicationNameBytes, (byte)0);
+                var length = nullIndex >= 0 ? nullIndex : this.applicationNameBytes.Length;
+                return System.Text.Encoding.ASCII.GetString(this.applicationNameBytes, 0, length);
+            }
+        }
 
         /// <summary>
         /// Gets or sets the application version major number.

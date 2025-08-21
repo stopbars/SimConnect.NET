@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10-beta] - 2025-08-21
+
+### Added
+
+-   Microsoft Flight Simulator 2024 detection logic (client now identifies whether it is connected to MSFS 2020 or MSFS 2024, enabling future version-specific behavior).
+
+### Changed
+
+-   Enhanced `SimConnectRecvOpen` structure handling to surface additional metadata required for differentiating simulator platform/version.
+
+### Notes
+
+-   Version detection is currently informational (no conditional behavior yet) but provides groundwork for future feature toggles or compatibility shims.
+
 ## [0.1.9-beta] - 2025-08-20
 
 ### Added

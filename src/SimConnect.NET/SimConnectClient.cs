@@ -33,6 +33,7 @@ namespace SimConnect.NET
         private int reconnectAttempts;
         private Task? reconnectTask;
         private CancellationTokenSource? reconnectCancellation;
+        private bool isMSFS2024;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SimConnectClient"/> class.
@@ -72,6 +73,24 @@ namespace SimConnect.NET
         /// Gets a value indicating whether the client is connected to SimConnect.
         /// </summary>
         public bool IsConnected => this.isConnected;
+
+        /// <summary>
+        /// Gets a value indicating whether the connected simulator instance is Microsoft Flight Simulator 2024.
+        /// Determined from the <c>ApplicationVersionMajor</c> field of the initial SimConnect OPEN message (value 12 currently indicates MSFS 2024 per SDK forum guidance).
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
+        public bool IsMSFS2024
+        {
+            get
+            {
+                if (!this.isConnected)
+                {
+                    throw new InvalidOperationException("Not connected to SimConnect. Call ConnectAsync first.");
+                }
+
+                return this.isMSFS2024;
+            }
+        }
 
         /// <summary>
         /// Gets or sets a value indicating whether auto-reconnection is enabled.
@@ -257,6 +276,7 @@ namespace SimConnect.NET
             this.inputEventManager?.Dispose();
             this.inputGroupManager?.Dispose();
             this.simObjectManager = null;
+            this.isMSFS2024 = false;
             this.simVarManager = null;
             this.aircraftDataManager = null;
             this.inputEventManager = null;
@@ -372,6 +392,9 @@ namespace SimConnect.NET
                             case SimConnectRecvId.Exception:
                                 this.ProcessError(ppData);
                                 break;
+                            case SimConnectRecvId.Open:
+                                this.ProcessOpen(ppData);
+                                break;
                             case SimConnectRecvId.ControllersList:
                             case SimConnectRecvId.ActionCallback:
                             case SimConnectRecvId.EnumerateInputEvents:
@@ -485,6 +508,26 @@ namespace SimConnect.NET
             {
                 SimConnectLogger.Error("Error processing SimConnect error message", ex);
                 this.OnErrorOccurred(SimConnectError.Error, ex, "Error processing SimConnect error message");
+            }
+        }
+
+        /// <summary>
+        /// Processes the OPEN message from SimConnect to capture simulator version information.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received OPEN data.</param>
+        private void ProcessOpen(IntPtr ppData)
+        {
+            try
+            {
+                var recvOpen = Marshal.PtrToStructure<SimConnectRecvOpen>(ppData);
+
+                // According to community reports (and current beta docs), ApplicationVersionMajor == 12 indicates MSFS 2024.
+                this.isMSFS2024 = recvOpen.ApplicationVersionMajor == 12;
+                SimConnectLogger.Info($"SimConnect OPEN received: AppVersion={recvOpen.ApplicationVersionMajor}.{recvOpen.ApplicationVersionMinor} Build={recvOpen.ApplicationBuildMajor}.{recvOpen.ApplicationBuildMinor} (IsMSFS2024={this.isMSFS2024})");
+            }
+            catch (Exception ex)
+            {
+                SimConnectLogger.Error("Error processing SimConnect OPEN message", ex);
             }
         }
 
