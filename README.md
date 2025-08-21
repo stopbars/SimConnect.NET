@@ -22,7 +22,7 @@
     <img src="https://img.shields.io/static/v1?label=&message=Open%20Collective&color=297EF2&logo=opencollective&logoColor=white" />
   </a>
   <a href="https://opensource.org/license/mit">
-    <img src="https://img.shields.io/static/v1?label=Licence&message=MIT&color=000" />
+    <img src="https://img.shields.io/static/v1?label=License&message=MIT&color=000" />
   </a>
   <br />
 </p>
