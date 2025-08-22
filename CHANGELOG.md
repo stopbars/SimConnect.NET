@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11-beta] - 2025-08-22
+
+### Fixed
+
+-   Corrected SetInputEvent to accept hash values as ulong, resolving type-mismatch issues.
+
 ## [0.1.10-beta] - 2025-08-21
 
 ### Added
