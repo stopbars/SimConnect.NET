@@ -456,7 +456,7 @@ namespace SimConnect.NET
         [DllImport("SimConnect.dll")]
         public static extern int SimConnect_SetInputEvent(
             IntPtr hSimConnect,
-            uint hash,
+            ulong hash,
             uint cbUnitSize,
             IntPtr value);
 

@@ -209,7 +209,7 @@ namespace SimConnect.NET.InputEvents
                 try
                 {
                     Marshal.Copy(valueBytes, 0, valuePtr, valueBytes.Length);
-                    var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (uint)hash, (uint)valueBytes.Length, valuePtr);
+                    var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (ulong)hash, (uint)valueBytes.Length, valuePtr);
                     if (result != (int)SimConnectError.None)
                     {
                         throw new SimConnectException($"Failed to set input event: {(SimConnectError)result}", (SimConnectError)result);
@@ -245,7 +245,7 @@ namespace SimConnect.NET.InputEvents
                 try
                 {
                     Marshal.Copy(valueBytes, 0, valuePtr, valueBytes.Length);
-                    var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (uint)hash, (uint)valueBytes.Length, valuePtr);
+                    var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (ulong)hash, (uint)valueBytes.Length, valuePtr);
                     if (result != (int)SimConnectError.None)
                     {
                         throw new SimConnectException($"Failed to set input event: {(SimConnectError)result}", (SimConnectError)result);
