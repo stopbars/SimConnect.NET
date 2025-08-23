@@ -671,26 +671,39 @@ namespace SimConnect.NET.InputEvents
         {
             try
             {
-                var recvGet = Marshal.PtrToStructure<SimConnectRecvGetInputEvent>(ppData);
+                var recvGet = Marshal.PtrToStructure<SimConnectRecvGetInputEventHeader>(ppData);
+                int headerSize  = Marshal.SizeOf<SimConnectRecvGetInputEventHeader>();
+                int totalSize   = checked((int)recvGet.hdr.dwSize);
+                int payloadSize = totalSize - headerSize;
+                IntPtr pValue = IntPtr.Add(ppData, headerSize);
+                double v = Marshal.PtrToStructure<double>(pValue);
 
                 // Extract value based on the type
                 object value;
                 switch (recvGet.Type)
                 {
                     case SimConnectInputEventType.DoubleValue:
-                        value = Marshal.PtrToStructure<double>(recvGet.Value);
+                        value = Marshal.PtrToStructure<double>(pValue);
                         break;
                     case SimConnectInputEventType.StringValue:
-                        value = Marshal.PtrToStringAnsi(recvGet.Value) ?? string.Empty;
+                        byte[] buf = new byte[payloadSize];
+                        Marshal.Copy(pValue, buf, 0, buf.Length);
+                        int nul = Array.IndexOf(buf, (byte)0);
+                        int len = (nul >= 0 ? nul : buf.Length);
+                        value = Encoding.ASCII.GetString(buf, 0, len);
                         break;
                     default:
-                        value = recvGet.Value.ToInt64();
+                        byte[] buf = new byte[payloadSize];
+                        Marshal.Copy(pValue, buf, 0, buf.Length);
+                        int nul = Array.IndexOf(buf, (byte)0);
+                        int len = (nul >= 0 ? nul : buf.Length);
+                        value = buf
                         break;
                 }
 
                 var inputEventValue = new InputEventValue
                 {
-                    Hash = recvGet.RequestId,
+                    // Hash = recvGet.RequestId,
                     Type = recvGet.Type,
                     Value = value,
                 };
