@@ -5,28 +5,7 @@
 namespace SimConnect.NET
 {
     /// <summary>
-    /// The SimConnectRecvGetInputEvent structure is used to return the value of a specific input event.
-    /// </summary>
-    public struct SimConnectRecvGetInputEvent
-    {
-        /// <summary>
-        /// Gets or sets the client-defined request ID.
-        /// </summary>
-        public uint RequestId { get; set; }
-
-        /// <summary>
-        /// Gets or sets the type of the input event. This is used to cast the Value to the correct type.
-        /// </summary>
-        public SimConnectInputEventType Type { get; set; }
-
-        /// <summary>
-        /// Gets or sets the value of the requested input event, which should be cast to the correct format (float / string).
-        /// </summary>
-        public Object Value { get; set; }
-    }
-
-    /// <summary>
-    /// The SimConnectRecvGetInputEvent structure is used to return the value of a specific input event.
+    /// The SimConnectRecvGetInputEventHeader structure is used to return the header of a specific input event including the type but without the value.
     /// </summary>
     public struct SimConnectRecvGetInputEventHeader
     {
