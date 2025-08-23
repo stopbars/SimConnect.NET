@@ -1,13 +1,13 @@
-// <copyright file="SimConnectRecvGetInputEvent.cs" company="BARS">
+// <copyright file="SimConnectRecvGetInputEventHeader.cs" company="BARS">
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
 namespace SimConnect.NET
 {
     /// <summary>
-    /// The SimConnectRecvGetInputEvent structure is used to return the value of a specific input event.
+    /// The SimConnectRecvGetInputEventHeader structure is used to return the header of a specific input event including the type but without the value.
     /// </summary>
-    public struct SimConnectRecvGetInputEvent
+    public struct SimConnectRecvGetInputEventHeader
     {
         /// <summary>
         /// Gets or sets the total size of the returned structure in bytes.
@@ -33,10 +33,5 @@ namespace SimConnect.NET
         /// Gets or sets the type of the input event. This is used to cast the Value to the correct type.
         /// </summary>
         public SimConnectInputEventType Type { get; set; }
-
-        /// <summary>
-        /// Gets or sets the value of the requested input event, which should be cast to the correct format (float / string).
-        /// </summary>
-        public IntPtr Value { get; set; }
     }
 }
