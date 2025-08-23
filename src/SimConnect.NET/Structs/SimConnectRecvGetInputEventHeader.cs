@@ -1,4 +1,4 @@
-// <copyright file="SimConnectRecvGetInputEvent.cs" company="BARS">
+// <copyright file="SimConnectRecvGetInputEventHeader.cs" company="BARS">
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 

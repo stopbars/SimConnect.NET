@@ -11,11 +11,6 @@ namespace SimConnect.NET
     public enum SimConnectInputEventType
     {
         /// <summary>
-        /// No data type specification required (C++ only).
-        /// </summary>
-        None,
-
-        /// <summary>
         /// Specifies a double value.
         /// </summary>
         DoubleValue,

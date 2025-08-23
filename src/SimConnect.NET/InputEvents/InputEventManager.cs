@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SimConnect.NET.Events;
@@ -179,7 +180,9 @@ namespace SimConnect.NET.InputEvents
 
                 using (cancellationToken.Register(() => tcs.TrySetCanceled()))
                 {
-                    return await tcs.Task.ConfigureAwait(false);
+                    var value = await tcs.Task.ConfigureAwait(false);
+                    value.Hash = hash; // Set the hash for reference
+                    return value;
                 }
             }
             finally
@@ -591,14 +594,13 @@ namespace SimConnect.NET.InputEvents
                             var typeValue = Marshal.ReadInt32(currentPtr);
                             var inputEventType = Enum.IsDefined(typeof(SimConnectInputEventType), typeValue)
                                 ? (SimConnectInputEventType)typeValue
-                                : SimConnectInputEventType.None; // Default to None if invalid
+                                : SimConnectInputEventType.DoubleValue; // Default to None if invalid
 
                             // Convert to SimConnectDataType for the descriptor
                             var type = inputEventType switch
                             {
                                 SimConnectInputEventType.DoubleValue => SimConnectDataType.FloatDouble,
                                 SimConnectInputEventType.StringValue => SimConnectDataType.String128,
-                                SimConnectInputEventType.None => SimConnectDataType.FloatDouble, // Default to double for unspecified type
                                 _ => SimConnectDataType.FloatDouble, // Default fallback
                             };
 
@@ -672,11 +674,13 @@ namespace SimConnect.NET.InputEvents
             try
             {
                 var recvGet = Marshal.PtrToStructure<SimConnectRecvGetInputEventHeader>(ppData);
-                int headerSize  = Marshal.SizeOf<SimConnectRecvGetInputEventHeader>();
-                int totalSize   = checked((int)recvGet.hdr.dwSize);
+                int headerSize = Marshal.SizeOf<SimConnectRecvGetInputEventHeader>();
+                int totalSize = checked((int)recvGet.Size);
                 int payloadSize = totalSize - headerSize;
+                System.Diagnostics.Debug.WriteLine($"[InputEventManager] Payload size: {payloadSize}");
                 IntPtr pValue = IntPtr.Add(ppData, headerSize);
-                double v = Marshal.PtrToStructure<double>(pValue);
+
+                // double v = Marshal.PtrToStructure<double>(pValue);
 
                 // Extract value based on the type
                 object value;
@@ -689,15 +693,14 @@ namespace SimConnect.NET.InputEvents
                         byte[] buf = new byte[payloadSize];
                         Marshal.Copy(pValue, buf, 0, buf.Length);
                         int nul = Array.IndexOf(buf, (byte)0);
-                        int len = (nul >= 0 ? nul : buf.Length);
+                        int len = nul >= 0 ? nul : buf.Length;
                         value = Encoding.ASCII.GetString(buf, 0, len);
                         break;
                     default:
-                        byte[] buf = new byte[payloadSize];
-                        Marshal.Copy(pValue, buf, 0, buf.Length);
-                        int nul = Array.IndexOf(buf, (byte)0);
-                        int len = (nul >= 0 ? nul : buf.Length);
-                        value = buf
+                        byte[] defBuf = new byte[payloadSize];
+                        Marshal.Copy(pValue, defBuf, 0, defBuf.Length);
+                        value = defBuf;
+                        value = BitConverter.ToDouble(defBuf, 0);
                         break;
                 }
 
