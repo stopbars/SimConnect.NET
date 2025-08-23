@@ -680,8 +680,6 @@ namespace SimConnect.NET.InputEvents
                 System.Diagnostics.Debug.WriteLine($"[InputEventManager] Payload size: {payloadSize}");
                 IntPtr pValue = IntPtr.Add(ppData, headerSize);
 
-                // double v = Marshal.PtrToStructure<double>(pValue);
-
                 // Extract value based on the type
                 object value;
                 switch (recvGet.Type)
@@ -706,7 +704,6 @@ namespace SimConnect.NET.InputEvents
 
                 var inputEventValue = new InputEventValue
                 {
-                    // Hash = recvGet.RequestId,
                     Type = recvGet.Type,
                     Value = value,
                 };
