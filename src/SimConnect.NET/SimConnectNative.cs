@@ -168,9 +168,9 @@ namespace SimConnect.NET
             uint defineId,
             [MarshalAs(UnmanagedType.LPStr)] string datumName,
             [MarshalAs(UnmanagedType.LPStr)] string unitsName,
-            uint datumType = 0,
+            uint datumType = 4,
             float fEpsilon = 0,
-            uint datumId = 0);
+            uint datumId = 0xFFFFFFFFu);
 
         [DllImport("SimConnect.dll")]
         public static extern int SimConnect_SetClientData(
