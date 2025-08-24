@@ -7,21 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13-beta] - 2025-08-24
+
+### Fixed
+
+-   Defaults for `SimConnect_AddToDataDefinition` updated to match SDK, allowing multiple variables to be added to the same definition without overwriting each other.
+
+### Changed
+
+-   Synced defaults with MSFS SDK header `SimConnect.h` (SIMCONNECT_DATATYPE default to `SIMCONNECT_DATATYPE_FLOAT64` = 4, and `SIMCONNECT_UNUSED` for datumId = `0xFFFFFFFF`).
+-   Updated P/Invoke signature in `SimConnectNative.SimConnect_AddToDataDefinition` to reflect these defaults.
+
+### Notes
+
+-   This unblocks dynamic structure retrieval scenarios where multiple fields are added to a single definition.
+
 ## [0.1.12-beta] - 2025-08-23
 
 ### Fixed
-- GetInputEventAsync: Correctly reads value bytes dynamically based on the reported type (double vs string) after parsing the header.
-- Hash assignment: Now sets the `Hash` from the requested hash rather than using the response `RequestId`.
+
+-   GetInputEventAsync: Correctly reads value bytes dynamically based on the reported type (double vs string) after parsing the header.
+-   Hash assignment: Now sets the `Hash` from the requested hash rather than using the response `RequestId`.
 
 ### Changed
-- Removed `None` from `SimConnectInputEventType` (SDK header and observed behavior indicate only `DOUBLE` and `STRING` are valid).
-- Introduced `SimConnectRecvGetInputEventHeader` (no value field) and updated marshalling to read the header first, then parse the value based on type and remaining bytes.
-- Adjusted GetInputEventAsync response handling to use the new header-first pattern.
+
+-   Removed `None` from `SimConnectInputEventType` (SDK header and observed behavior indicate only `DOUBLE` and `STRING` are valid).
+-   Introduced `SimConnectRecvGetInputEventHeader` (no value field) and updated marshalling to read the header first, then parse the value based on type and remaining bytes.
+-   Adjusted GetInputEventAsync response handling to use the new header-first pattern.
 
 ### Notes
-- Verified against SDK headers (`SIMCONNECT_INPUT_EVENT_TYPE_DOUBLE`, `SIMCONNECT_INPUT_EVENT_TYPE_STRING`) and by testing against enumerated input events.
-- The standard test case now detects the double value correctly.
-- API note: removing the `None` enum member may be a compile-time change if any consumer referenced it; valid types are now Double and String.
+
+-   Verified against SDK headers (`SIMCONNECT_INPUT_EVENT_TYPE_DOUBLE`, `SIMCONNECT_INPUT_EVENT_TYPE_STRING`) and by testing against enumerated input events.
+-   The standard test case now detects the double value correctly.
+-   API note: removing the `None` enum member may be a compile-time change if any consumer referenced it; valid types are now Double and String.
 
 ## [0.1.11-beta] - 2025-08-22
 
