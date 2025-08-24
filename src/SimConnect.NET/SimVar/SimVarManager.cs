@@ -578,13 +578,6 @@ namespace SimConnect.NET.SimVar
             return Marshal.PtrToStringAnsi(dataPtr, maxLength)?.TrimEnd('\0') ?? string.Empty;
         }
 
-        private static int Align8(int size)
-        {
-            // Round up to next multiple of 8
-            var rem = size % 8;
-            return rem == 0 ? size : size + (8 - rem);
-        }
-
         private static void CancelRequest(object request)
         {
             var requestType = request.GetType();
