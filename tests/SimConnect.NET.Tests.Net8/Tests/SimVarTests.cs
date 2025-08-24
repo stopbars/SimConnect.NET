@@ -183,8 +183,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
 /// <summary>
 /// Represents the aircraft position using SimVars.
 /// </summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct Position
+internal struct Position
 {
     /// <summary>
     /// Gets or sets the latitude of the plane in degrees.
