@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14-beta] - 2025-08-25
+
+### Added
+
+-   Fetch multiple SimVars at once into your own struct with `SimVars.GetAsync<TStruct>()`.
+    -   Annotate your struct fields with the new `[SimConnect("NAME", "unit", dataType?, order?)]` attribute and the library will marshal the values for you in a single request.
+    -   Example use-cases: grab position, speed, and title in one call for low-latency snapshots.
+
+### Notes
+
+-   Attributes can infer unit and data type from the built‑in SimVar registry when possible, but specifying all three (name, unit, type) is recommended for clarity.
+-   Optional `order` lets you control field ordering; otherwise, struct field order is used.
+-   Non-breaking additive feature. Thanks to @bstudtma for the contribution in PR #9.
+
 ## [0.1.13-beta] - 2025-08-24
 
 ### Fixed
