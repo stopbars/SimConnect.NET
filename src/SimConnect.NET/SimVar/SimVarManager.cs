@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using SimConnect.NET.SimVar.Internal;
 
 namespace SimConnect.NET.SimVar
 {
@@ -24,6 +25,9 @@ namespace SimConnect.NET.SimVar
         private readonly IntPtr simConnectHandle;
         private readonly ConcurrentDictionary<uint, object> pendingRequests;
         private readonly ConcurrentDictionary<(string Name, string Unit), uint> dataDefinitions;
+        private readonly ConcurrentDictionary<uint, (System.Reflection.FieldInfo Field, SimConnectAttribute Attr)[]> defIndex = new();
+        private readonly ConcurrentDictionary<Type, uint> typeToDefIndex = new();
+
         private uint nextDefinitionId;
         private uint nextRequestId;
         private bool disposed;
@@ -142,6 +146,70 @@ namespace SimConnect.NET.SimVar
         }
 
         /// <summary>
+        /// Gets a full struct from SimConnect as a strongly-typed object using a dynamically built data definition.
+        /// </summary>
+        /// <typeparam name="T">The struct type to request. Must be blittable/marshalable.</typeparam>
+        /// <param name="objectId">The SimConnect object ID (defaults to user aircraft).</param>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>A task that represents the asynchronous operation and returns the requested struct.</returns>
+        public async Task<T> GetAsync<T>(
+            uint objectId = SimConnectObjectIdUser,
+            CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimVarManager));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (this.simConnectHandle == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SimConnect handle is not initialized.");
+            }
+
+            // Build definition for the struct using the native handle directly to avoid client coupling.
+            if (!this.typeToDefIndex.TryGetValue(typeof(T), out var defId))
+            {
+                var (newDefId, fields) = SimVarStructBinder.BuildAndRegisterFromStruct<T>(this.simConnectHandle);
+                this.defIndex[newDefId] = fields;
+                this.typeToDefIndex[typeof(T)] = newDefId;
+                defId = newDefId;
+            }
+
+            var requestId = Interlocked.Increment(ref this.nextRequestId);
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+            this.pendingRequests[requestId] = tcs;
+
+            // Request data once for the specified object.
+            var hr = SimConnectNative.SimConnect_RequestDataOnSimObject(
+                this.simConnectHandle,
+                requestId,
+                defId,
+                objectId,
+                (uint)SimConnectPeriod.Once);
+
+            if (hr != (int)SimConnectError.None)
+            {
+                this.pendingRequests.TryRemove(requestId, out _);
+                throw new SimConnectException($"Failed to request struct {typeof(T).Name}: {(SimConnectError)hr}", (SimConnectError)hr);
+            }
+
+            using (cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken)))
+            {
+                // Apply optional manager timeout consistent with SimVar value requests
+                if (this.requestTimeout != Timeout.InfiniteTimeSpan)
+                {
+                    var timeoutTask = Task.Delay(this.requestTimeout, CancellationToken.None);
+                    var completed = await Task.WhenAny(tcs.Task, timeoutTask).ConfigureAwait(false);
+                    if (completed == timeoutTask)
+                    {
+                        this.pendingRequests.TryRemove(requestId, out _);
+                        throw new TimeoutException($"Struct request '{typeof(T).Name}' timed out after {this.requestTimeout} (RequestId={requestId})");
+                    }
+                }
+
+                return await tcs.Task.ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Processes a received SimConnect message and completes any pending requests.
         /// </summary>
         /// <param name="data">The received data pointer.</param>
@@ -164,12 +232,61 @@ namespace SimConnect.NET.SimVar
                     var objectData = Marshal.PtrToStructure<SimConnectRecvSimObjectData>(data);
                     var requestId = objectData.RequestId;
 
-                    SimConnectLogger.Debug($"SimVar response received: RequestId={requestId}, DefineId={objectData.DefineId}, Size={recv.Size}");
-
                     if (this.pendingRequests.TryRemove(requestId, out var request))
                     {
-                        // Complete the request with the received data
-                        CompleteRequest(request, data, dataSize);
+                        // If this is a simple SimVarRequest<>, use existing completion logic
+                        if (request.GetType().IsGenericType && request.GetType().GetGenericTypeDefinition() == typeof(SimVarRequest<>))
+                        {
+                            CompleteRequest(request, data, dataSize);
+                        }
+                        else
+                        {
+                            // Otherwise, treat as a struct T TaskCompletionSource stored by GetAsync<T>() struct overload
+                            try
+                            {
+                                var definitionId = objectData.DefineId;
+                                if (!this.defIndex.TryGetValue(definitionId, out var fields))
+                                {
+                                    throw new InvalidOperationException($"No struct definition found for DefineId={definitionId}");
+                                }
+                                else
+                                {
+                                    var headerSize = Marshal.SizeOf<SimConnectRecvSimObjectData>() - sizeof(ulong);
+                                    var dataPtr = IntPtr.Add(data, headerSize);
+                                    var currentPtr = dataPtr;
+                                    var tcsType = request.GetType();
+                                    if (tcsType.IsGenericType && tcsType.GetGenericTypeDefinition() == typeof(TaskCompletionSource<>))
+                                    {
+                                        var structType = tcsType.GetGenericArguments()[0];
+                                        var boxed = Activator.CreateInstance(structType)!;
+                                        foreach (var (field, attr) in fields)
+                                        {
+                                            var simConnectType = attr.DataType;
+                                            var fieldType = field.FieldType;
+                                            var simConnectSize = SimVarDataTypeSizing.GetDatumSizeBytes(simConnectType);
+                                            var fieldName = field.Name;
+                                            object? value = ParseType(currentPtr, simConnectType, fieldType);
+                                            field.SetValue(boxed, value);
+                                            currentPtr = IntPtr.Add(currentPtr, simConnectSize);
+                                        }
+
+                                        var trySetResultMethod = tcsType.GetMethod("TrySetResult");
+                                        trySetResultMethod?.Invoke(request, new[] { boxed });
+                                    }
+                                    else
+                                    {
+                                        SimConnectLogger.Warning("Unexpected TCS type for struct response.");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                SimConnectLogger.Error("Error completing struct request", ex);
+                                var tcsType = request.GetType();
+                                var setEx = tcsType.GetMethod("TrySetException", new[] { typeof(Exception) });
+                                setEx?.Invoke(request, new object[] { ex });
+                            }
+                        }
                     }
                     else
                     {
@@ -207,42 +324,17 @@ namespace SimConnect.NET.SimVar
         {
             var type = typeof(T);
 
-            if (type == typeof(int) || type == typeof(bool))
+            return type switch
             {
-                return SimConnectDataType.Integer32;
-            }
-
-            if (type == typeof(long))
-            {
-                return SimConnectDataType.Integer64;
-            }
-
-            if (type == typeof(float))
-            {
-                return SimConnectDataType.FloatSingle;
-            }
-
-            if (type == typeof(double))
-            {
-                return SimConnectDataType.FloatDouble;
-            }
-
-            if (type == typeof(string))
-            {
-                return SimConnectDataType.String256; // Default string size
-            }
-
-            if (type == typeof(SimConnectDataLatLonAlt))
-            {
-                return SimConnectDataType.LatLonAlt;
-            }
-
-            if (type == typeof(SimConnectDataXyz))
-            {
-                return SimConnectDataType.Xyz;
-            }
-
-            throw new ArgumentException($"Unsupported type for SimVar: {type.Name}");
+                Type t when t == typeof(int) || t == typeof(bool) => SimConnectDataType.Integer32,
+                Type t when t == typeof(long) => SimConnectDataType.Integer64,
+                Type t when t == typeof(float) => SimConnectDataType.FloatSingle,
+                Type t when t == typeof(double) => SimConnectDataType.FloatDouble,
+                Type t when t == typeof(string) => SimConnectDataType.String256, // Default string size
+                Type t when t == typeof(SimConnectDataLatLonAlt) => SimConnectDataType.LatLonAlt,
+                Type t when t == typeof(SimConnectDataXyz) => SimConnectDataType.Xyz,
+                _ => throw new ArgumentException($"Unsupported type for SimVar: {type.Name}"),
+            };
         }
 
         private static bool IsTypeCompatible(Type requestedType, Type definitionType)
@@ -368,6 +460,7 @@ namespace SimConnect.NET.SimVar
                 // Parse the data based on the definition's data type
                 var parsedValue = ParseDataByType(dataPtr, definition.DataType, valueType);
 
+                // Use reflection to call SetResult directly, avoiding dynamic
                 var setResultMethod = requestType.GetMethod("SetResult");
                 setResultMethod?.Invoke(request, new[] { parsedValue });
             }
@@ -445,6 +538,20 @@ namespace SimConnect.NET.SimVar
             }
 
             return value;
+        }
+
+        private static object? ParseType(IntPtr dataPtr, SimConnectDataType simConnectType, Type fieldType)
+        {
+            return fieldType switch
+            {
+            Type t when t == typeof(int) => ParseInteger32(dataPtr),
+            Type t when t == typeof(long) => ParseInteger64(dataPtr),
+            Type t when t == typeof(float) => ParseFloat32(dataPtr),
+            Type t when t == typeof(double) => ParseFloat64(dataPtr),
+            Type t when t == typeof(string) => ParseString(dataPtr, simConnectType),
+            Type t when t == typeof(bool) => ParseInteger32(dataPtr) != 0,
+            _ => Marshal.PtrToStructure(dataPtr, fieldType),
+            };
         }
 
         private static double ParseFloat64(IntPtr dataPtr)

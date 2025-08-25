@@ -2,6 +2,7 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
+using System.Runtime.InteropServices;
 using SimConnect.NET;
 
 namespace SimConnect.NET.Tests.Net8.Tests
@@ -90,6 +91,26 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 return false;
             }
 
+            var position = await client.SimVars.GetAsync<Position>(cancellationToken: cancellationToken);
+            Console.WriteLine($"      🗺️  Position struct: {position.Latitude:F6}°, {position.Longitude:F6}°, {position.Altitude:F0}ft");
+            if (position.Latitude < -90 || position.Latitude > 90)
+            {
+                Console.WriteLine("   ❌ Invalid latitude value");
+                return false;
+            }
+
+            if (position.Longitude < -180 || position.Longitude > 180)
+            {
+                Console.WriteLine("   ❌ Invalid longitude value");
+                return false;
+            }
+
+            if (position.Altitude < 0 || position.Altitude > 60000)
+            {
+                Console.WriteLine("   ❌ Invalid altitude value");
+                return false;
+            }
+
             return true;
         }
 
@@ -157,4 +178,28 @@ namespace SimConnect.NET.Tests.Net8.Tests
             return results.All(r => !double.IsNaN(r) && !double.IsInfinity(r));
         }
     }
+}
+
+/// <summary>
+/// Represents the aircraft position using SimVars.
+/// </summary>
+public struct Position
+{
+    /// <summary>
+    /// Gets or sets the latitude of the plane in degrees.
+    /// </summary>
+    [SimConnect("PLANE LATITUDE", "degrees")]
+    public double Latitude;
+
+    /// <summary>
+    /// Gets or sets the longitude of the plane in degrees.
+    /// </summary>
+    [SimConnect("PLANE LONGITUDE", "degrees")]
+    public double Longitude;
+
+    /// <summary>
+    /// Gets or sets the altitude of the plane in feet.
+    /// </summary>
+    [SimConnect("PLANE ALTITUDE", "feet")]
+    public double Altitude;
 }
