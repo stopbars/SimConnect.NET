@@ -87,12 +87,7 @@ namespace SimConnect.NET.SimVar.Internal
                 var cb = this.OnValue;
                 if (cb is not null)
                 {
-                    // Dispatch off-thread to avoid blocking the SimConnect message loop.
-                    // This avoids blocking the SimConnect message loop, which must remain responsive.
-                    // UnsafeQueueUserWorkItem is used for performance; preferLocal ensures the callback runs on a local thread pool thread.
-                    // The callback and value are packed into a tuple for passing to the lambda.
-                    // // The lambda is marked 'static' so it does not capture any variables from the outer scope.
-                    // 'state' is the tuple (Callback, Value) passed as the work item state.
+                    // Dispatch callback off-thread to avoid blocking the SimConnect message loop.
                     ThreadPool.UnsafeQueueUserWorkItem<(Action<T> Callback, T Value)>(
                         static state =>
                         {
