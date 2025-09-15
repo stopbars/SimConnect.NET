@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.16-beta] - 2025-09-15
+
+### Added
+
+-   SimVar subscription API for streaming recurring simulator data.
+    -   Subscribe to a struct model (single cached definition) or a single SimVar by name/unit.
+    -   Both overloads return an `ISimVarSubscription` you can dispose to stop updates.
+
+### Fixed
+
+-   Resolved a crash observed in tests by refactoring subscribed input event processing:
+    -   Treat `SimConnectRecvSubscribeInputEvent` as a header; the value payload follows immediately in memory.
+    -   `ProcessSubscribeInputEvent` now computes the payload pointer and size from the header, then extracts the value robustly for doubles and strings.
+    -   Added `[StructLayout(LayoutKind.Sequential)]` to `SimConnectRecvSubscribeInputEvent` to guarantee interop layout.
+    -   Removed the `Value` field from `SimConnectRecvSubscribeInputEvent` to clarify it is header-only.
+
+### Changed
+
+-   `SimConnectAttribute` constructors are more flexible: optional/nullable `unit`, `dataType`, and `order`; avoids throwing when a SimVar isn't found in the registry.
+-   Internal refactor for performance and clarity: new field readers and request/subscription types to optimize hot-path handling.
+
+### Notes
+
+-   Thanks to @bstudtma for the contribution in PR #10.
+
 ## [0.1.14-beta] - 2025-08-25
 
 ### Added

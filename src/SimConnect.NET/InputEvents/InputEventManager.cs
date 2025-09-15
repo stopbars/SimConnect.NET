@@ -725,18 +725,38 @@ namespace SimConnect.NET.InputEvents
             {
                 var recvSubscribe = Marshal.PtrToStructure<SimConnectRecvSubscribeInputEvent>(ppData);
 
-                // Extract value based on the type, similar to how it's done in ProcessGetInputEvent
+                // Compute pointer to the payload (value) directly after the header
+                int headerSize = Marshal.SizeOf<SimConnectRecvSubscribeInputEvent>();
+                int totalSize = checked((int)recvSubscribe.Size);
+                int payloadSize = totalSize - headerSize;
+                IntPtr pValue = IntPtr.Add(ppData, headerSize);
+
+                // Extract value based on the type, mirroring GetInputEvent
                 object value;
                 switch (recvSubscribe.Type)
                 {
                     case SimConnectInputEventType.DoubleValue:
-                        value = Marshal.PtrToStructure<double>(recvSubscribe.Value);
+                        value = payloadSize >= sizeof(double)
+                            ? Marshal.PtrToStructure<double>(pValue)
+                            : 0d;
                         break;
                     case SimConnectInputEventType.StringValue:
-                        value = Marshal.PtrToStringAnsi(recvSubscribe.Value) ?? string.Empty;
+                        if (payloadSize > 0)
+                        {
+                            byte[] buf = new byte[payloadSize];
+                            Marshal.Copy(pValue, buf, 0, buf.Length);
+                            int nul = Array.IndexOf(buf, (byte)0);
+                            int len = nul >= 0 ? nul : buf.Length;
+                            value = Encoding.ASCII.GetString(buf, 0, len);
+                        }
+                        else
+                        {
+                            value = string.Empty;
+                        }
+
                         break;
                     default:
-                        value = recvSubscribe.Value.ToInt64();
+                        value = null!;
                         break;
                 }
 

@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-  <Version>0.1.14-beta</Version>
+    <Version>0.1.16-beta</Version>
     <Authors>BARS</Authors>
     <Company>BARS</Company>
     <Product>SimConnect.NET</Product>

@@ -2,11 +2,15 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
+using System.Runtime.InteropServices;
+
 namespace SimConnect.NET
 {
     /// <summary>
-    /// Represents the value of a subscribed input event.
+    /// Represents the header for a subscribed input event notification.
+    /// The value payload immediately follows this header in memory.
     /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
     public struct SimConnectRecvSubscribeInputEvent
     {
         /// <summary>
@@ -33,10 +37,5 @@ namespace SimConnect.NET
         /// Gets or sets the type of the input event, which is a member of the <see cref="SimConnectInputEventType"/> enumeration.
         /// </summary>
         public SimConnectInputEventType Type { get; set; }
-
-        /// <summary>
-        /// Gets or sets the value of the requested input event, which should be cast to the correct format (e.g., float or string).
-        /// </summary>
-        public IntPtr Value { get; set; }
     }
 }
