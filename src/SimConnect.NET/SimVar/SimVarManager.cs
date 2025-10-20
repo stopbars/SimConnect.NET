@@ -355,7 +355,10 @@ namespace SimConnect.NET.SimVar
                     }
                     catch (Exception ex)
                     {
-                        SimConnectLogger.Debug($"Suppressing error disposing subscription {kvp.Key}: {ex.Message}");
+                        if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                        {
+                            SimConnectLogger.Debug($"Suppressing error disposing subscription {kvp.Key}: {ex.Message}");
+                        }
                     }
                 }
 
@@ -451,12 +454,19 @@ namespace SimConnect.NET.SimVar
             {
                 try
                 {
-                    SimConnectLogger.Debug($"Canceling recurring request {request.RequestId} (Def={request.DefinitionId}, Obj={request.ObjectId})");
+                    if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                    {
+                        SimConnectLogger.Debug($"Canceling recurring request {request.RequestId} (Def={request.DefinitionId}, Obj={request.ObjectId})");
+                    }
+
                     this.RequestDataOnSimObject(request.RequestId, request.DefinitionId, request.ObjectId, SimConnectPeriod.Never);
                 }
                 catch (Exception ex)
                 {
-                    SimConnectLogger.Debug($"Suppressing error during CancelRequest for {request.RequestId}: {ex.Message}");
+                    if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                    {
+                        SimConnectLogger.Debug($"Suppressing error during CancelRequest for {request.RequestId}: {ex.Message}");
+                    }
                 }
             }
 
@@ -593,15 +603,15 @@ namespace SimConnect.NET.SimVar
             return SimVarMemoryReader.ReadFixedString(dataPtr, maxLength);
         }
 
-    /// <summary>
-    /// Wrapper to call SimConnect_RequestDataOnSimObject with consistent error handling.
-    /// A local context string is generated from the parameters for logging and exception messages.
-    /// </summary>
+        /// <summary>
+        /// Wrapper to call SimConnect_RequestDataOnSimObject with consistent error handling.
+        /// A local context string is generated from the parameters for logging and exception messages.
+        /// </summary>
         /// <param name="requestId">The SimConnect request identifier.</param>
         /// <param name="definitionId">The data definition identifier.</param>
         /// <param name="objectId">The target object identifier.</param>
-    /// <param name="period">The request period.</param>
-    /// <remarks>Throws a SimConnectException on error (except when period == Never which is used internally for cancellation).</remarks>
+        /// <param name="period">The request period.</param>
+        /// <remarks>Throws a SimConnectException on error (except when period == Never which is used internally for cancellation).</remarks>
         private void RequestDataOnSimObject(
             uint requestId,
             uint definitionId,
@@ -737,7 +747,11 @@ namespace SimConnect.NET.SimVar
 
             if (this.dataDefinitions.TryGetValue(key, out var existingId))
             {
-                SimConnectLogger.Debug($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
+                }
+
                 return existingId;
             }
 
@@ -775,7 +789,11 @@ namespace SimConnect.NET.SimVar
 
             if (this.dataDefinitions.TryGetValue(key, out var existingId))
             {
-                SimConnectLogger.Debug($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Reusing existing definition ID {existingId} for {key.Name}|{key.Unit}");
+                }
+
                 return existingId;
             }
 
@@ -788,7 +806,10 @@ namespace SimConnect.NET.SimVar
             }
 
             var definitionId = Interlocked.Increment(ref this.nextDefinitionId);
-            SimConnectLogger.Debug($"Creating new definition ID {definitionId} for {name}|{unit}");
+            if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+            {
+                SimConnectLogger.Debug($"Creating new definition ID {definitionId} for {name}|{unit}");
+            }
 
             var result = SimConnectNative.SimConnect_AddToDataDefinition(
                 this.simConnectHandle,

@@ -83,7 +83,10 @@ namespace SimConnect.NET.AI
                         (SimConnectError)result);
                 }
 
-                SimConnectLogger.Debug($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
+                }
 
                 // Wait for the object creation to complete with shorter timeout
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -123,7 +126,11 @@ namespace SimConnect.NET.AI
 
             if (!simObject.IsActive)
             {
-                SimConnectLogger.Debug($"SimObjectManager: Object {simObject.ObjectId} is already inactive");
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"SimObjectManager: Object {simObject.ObjectId} is already inactive");
+                }
+
                 return Task.CompletedTask;
             }
 
@@ -332,7 +339,10 @@ namespace SimConnect.NET.AI
 
                 this.managedObjects.Clear();
 
-                SimConnectLogger.Debug("SimObjectManager: Disposed");
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug("SimObjectManager: Disposed");
+                }
             }
             finally
             {

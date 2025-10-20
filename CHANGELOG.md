@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.16-beta] - 2025-10-20
+
+### Added
+
+-   Set multiple SimVars in one shot by passing a struct to `SimVars.SetAsync<T>()`, mirroring the existing struct-based reader pipeline.
+-   Internal field-writer pipeline that packs annotated struct fields into the unmanaged buffer used for SimConnect writes.
+-   Test coverage that exercises struct-based sets, validates altitude adjustments, and restores the original values afterward.
+
+### Performance
+
+-   Wrapped verbose debug logging in hot paths with `SimConnectLogger.IsLevelEnabled` checks to avoid string allocations and GC churn when debug logging is disabled.
+
+### Fixed
+
+-   Updated the AI object lifecycle test to spawn the `CoffeeCup` model so it no longer times out on missing assets.
+-   Stabilized the performance timeout test by ensuring the cancellation token fires before issuing the request.
+
+### Notes
+
+-   Thanks to @bstudtma for the contribution in PR #11.
+
 ## [0.1.15-beta] - 2025-09-15
 
 ### Added

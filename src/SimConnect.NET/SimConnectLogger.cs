@@ -130,6 +130,14 @@ namespace SimConnect.NET
         }
 
         /// <summary>
+        /// Determines whether logging is currently enabled for the specified level.
+        /// Helps avoid expensive string formatting on disabled levels.
+        /// </summary>
+        /// <param name="level">The log level to check.</param>
+        /// <returns><c>true</c> if the level is enabled; otherwise, <c>false</c>.</returns>
+        public static bool IsLevelEnabled(LogLevel level) => Instance.IsLevelEnabledInternal(level);
+
+        /// <summary>
         /// Logs a debug message.
         /// </summary>
         /// <param name="message">The message.</param>
@@ -220,7 +228,7 @@ namespace SimConnect.NET
                 return;
             }
 
-            if (level < this.MinimumLevel)
+            if (!this.IsLevelEnabledInternal(level))
             {
                 return;
             }
@@ -234,6 +242,8 @@ namespace SimConnect.NET
                 // ignored
             }
         }
+
+        private bool IsLevelEnabledInternal(LogLevel level) => level >= this.MinimumLevel;
 
         private void ProcessQueue()
         {
