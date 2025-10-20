@@ -47,6 +47,12 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     return false;
                 }
 
+                // Test setting position via struct
+                if (!await TestPositionStructSetAsync(client, cts.Token))
+                {
+                    return false;
+                }
+
                 // Test rapid consecutive requests
                 if (!await TestRapidRequests(client, cts.Token))
                 {
@@ -163,6 +169,49 @@ namespace SimConnect.NET.Tests.Net8.Tests
             }
 
             Console.WriteLine("      ✅ Setting and restoring successful");
+            return true;
+        }
+
+        private static async Task<bool> TestPositionStructSetAsync(SimConnectClient client, CancellationToken cancellationToken)
+        {
+            Console.WriteLine("   🔧 Testing SetAsync with Position struct (altitude +15 ft, then restore)...");
+
+            // Get current position (includes altitude)
+            var original = await client.SimVars.GetAsync<Position>(cancellationToken: cancellationToken);
+            Console.WriteLine($"      Original Altitude: {original.Altitude:F2} ft");
+
+            var target = original;
+            target.Altitude = original.Altitude + 15.0;
+
+            // Attempt to set new altitude via struct
+            await client.SimVars.SetAsync(target, cancellationToken: cancellationToken);
+
+            var afterSet = await client.SimVars.GetAsync<Position>(cancellationToken: cancellationToken);
+            Console.WriteLine($"      After Set Altitude: {afterSet.Altitude:F2} ft (target {target.Altitude:F2} ft)");
+
+            // Tolerance for sim update/drift
+            const double toleranceFt = 10.0;
+            var deltaAfterSet = Math.Abs(afterSet.Altitude - target.Altitude);
+            if (deltaAfterSet > toleranceFt)
+            {
+                Console.WriteLine($"   ❌ Altitude not within tolerance after set. Δ={deltaAfterSet:F2} ft");
+                return false;
+            }
+
+            // Restore original altitude
+            await client.SimVars.SetAsync(original, cancellationToken: cancellationToken);
+
+            var restored = await client.SimVars.GetAsync<Position>(cancellationToken: cancellationToken);
+            Console.WriteLine($"      Restored Altitude: {restored.Altitude:F2} ft (expected {original.Altitude:F2} ft)");
+
+            var deltaRestore = Math.Abs(restored.Altitude - original.Altitude);
+            if (deltaRestore > toleranceFt)
+            {
+                Console.WriteLine($"   ❌ Altitude not restored within tolerance. Δ={deltaRestore:F2} ft");
+                return false;
+            }
+
+            Console.WriteLine("      ✅ Position struct SetAsync OK");
             return true;
         }
 

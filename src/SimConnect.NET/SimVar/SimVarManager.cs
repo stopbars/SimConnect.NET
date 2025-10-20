@@ -129,6 +129,33 @@ namespace SimConnect.NET.SimVar
         }
 
         /// <summary>
+        /// Sets multiple SimVars in one call by passing a struct annotated with <see cref="SimConnectAttribute"/> fields.
+        /// This mirrors the struct-based GetAsync and uses the same definition/layout.
+        /// </summary>
+        /// <typeparam name="T">The struct type to write. Must have public fields annotated with <see cref="SimConnectAttribute"/>.</typeparam>
+        /// <param name="value">The struct instance whose fields should be written.</param>
+        /// <param name="objectId">The SimConnect object ID (defaults to user aircraft).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that represents the asynchronous set operation.</returns>
+        public async Task SetAsync<T>(
+            T value,
+            uint objectId = SimConnectObjectIdUser,
+            CancellationToken cancellationToken = default)
+            where T : struct
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimVarManager));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (this.simConnectHandle == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("SimConnect handle is not initialized.");
+            }
+
+            var defId = this.EnsureTypeDefinition<T>(cancellationToken);
+            await this.SetStructAsync(defId, value, objectId, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Gets a full struct from SimConnect as a strongly-typed object using a dynamically built data definition.
         /// </summary>
         /// <typeparam name="T">The struct type to request. Must be blittable/marshalable.</typeparam>
@@ -880,6 +907,51 @@ namespace SimConnect.NET.SimVar
 
             this.dataDefinitions[key] = definitionId;
             return definitionId;
+        }
+
+        /// <summary>
+        /// Core handler that writes a struct T using the same field layout as EnsureTypeDefinition created.
+        /// </summary>
+        private async Task SetStructAsync<T>(uint definitionId, T value, uint objectId, CancellationToken cancellationToken)
+            where T : struct
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Build writers without re-adding to definition; EnsureTypeDefinition already registered it.
+            var (writers, totalSize) = SimVarFieldWriterFactory.Build<T>(addToDefinition: null);
+
+            await Task.Run(
+                () =>
+                {
+                    var dataPtr = Marshal.AllocHGlobal(totalSize);
+                    try
+                    {
+                        // Fill the buffer in the same order/sizes as the definition
+                        foreach (var w in writers)
+                        {
+                            w.WriteFrom(in value, dataPtr);
+                        }
+
+                        var hr = SimConnectNative.SimConnect_SetDataOnSimObject(
+                            this.simConnectHandle,
+                            definitionId,
+                            objectId,
+                            0,
+                            1,
+                            (uint)totalSize,
+                            dataPtr);
+
+                        if (hr != (int)SimConnectError.None)
+                        {
+                            throw new SimConnectException($"Failed to set struct '{typeof(T).Name}': {(SimConnectError)hr}", (SimConnectError)hr);
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(dataPtr);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
         }
     }
 }
