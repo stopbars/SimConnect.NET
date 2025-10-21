@@ -23,12 +23,12 @@ namespace SimConnect.NET.SimVar.Internal
         {
             var t = typeof(T);
 
-            // Collect and order fields with [SimVar]
+            // Collect and order fields with [SimConnect]
             var fields = GetOrderedSimVarFields(t);
 
             if (fields.Count == 0)
             {
-                throw new InvalidOperationException($"Type {t.FullName} has no fields with [SimVar].");
+                throw new InvalidOperationException($"Type {t.FullName} has no fields with [SimConnect].");
             }
 
             var readers = new List<IFieldReader<T>>(fields.Count);

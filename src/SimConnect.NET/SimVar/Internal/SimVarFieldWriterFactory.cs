@@ -25,7 +25,7 @@ namespace SimConnect.NET.SimVar.Internal
             var fields = GetOrderedSimVarFields(t);
             if (fields.Count == 0)
             {
-                throw new InvalidOperationException($"Type {t.FullName} has no fields with [SimVar].");
+                throw new InvalidOperationException($"Type {t.FullName} has no fields with [SimConnect].");
             }
 
             var writers = new List<IFieldWriter<T>>(fields.Count);

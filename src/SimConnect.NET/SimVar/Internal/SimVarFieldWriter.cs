@@ -67,13 +67,26 @@ namespace SimConnect.NET.SimVar.Internal
                     {
                         var getter = (Func<T, string>)this.Extractor;
                         string s = getter(source) ?? string.Empty;
-                        var bytes = System.Text.Encoding.ASCII.GetBytes(s);
 
-                        // zero-initialize then copy up to Size
+                        // zero-initialize then encode into span up to Size-1, ensure explicit null-termination
+                        // SimConnect expects fixed-size, null-terminated ANSI strings.
+                        // We reserve the last byte for '\0' when Size > 0 to avoid losing the terminator.
                         Span<byte> tmp = stackalloc byte[this.Size];
-                        var copyLen = Math.Min(bytes.Length, this.Size);
-                        bytes.AsSpan(0, copyLen).CopyTo(tmp);
-                        Marshal.Copy(tmp.ToArray(), 0, addr, this.Size);
+                        if (this.Size > 0)
+                        {
+                            var dest = tmp[..(this.Size - 1)];
+                            _ = System.Text.Encoding.Latin1.GetBytes(s.AsSpan(), dest);
+
+                            // Explicitly set terminator even though tmp is zeroed by default
+                            tmp[this.Size - 1] = 0;
+                        }
+
+                        // Copy without allocating an intermediate array
+                        for (int i = 0; i < this.Size; i++)
+                        {
+                            Marshal.WriteByte(addr, i, tmp[i]);
+                        }
+
                         break;
                     }
 
