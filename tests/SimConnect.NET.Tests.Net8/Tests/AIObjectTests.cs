@@ -12,6 +12,8 @@ namespace SimConnect.NET.Tests.Net8.Tests
     /// </summary>
     public class AIObjectTests : ISimConnectTest
     {
+        private const string TestSimObjectModel = "CoffeeCup";
+
         /// <inheritdoc/>
         public string Name => "AI Object Management";
 
@@ -83,7 +85,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
 
             Console.WriteLine($"      🎯 Creating AI object at {position.Latitude:F6}, {position.Longitude:F6}");
 
-            var aiObject = await client.AIObjects.CreateObjectAsync("BARS_Stopbar_On", position, "Test Object", cancellationToken);
+            var aiObject = await client.AIObjects.CreateObjectAsync(TestSimObjectModel, position, "Test Object", cancellationToken);
             Console.WriteLine($"      ✅ AI Object created with ID: {aiObject.ObjectId}");
 
             if (!aiObject.IsActive)
@@ -130,7 +132,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                         Airspeed = 0,
                     };
 
-                    var obj = await client.AIObjects.CreateObjectAsync("BARS_Stopbar_On", position, $"Test Object {i}", cancellationToken);
+                    var obj = await client.AIObjects.CreateObjectAsync(TestSimObjectModel, position, $"Test Object {i}", cancellationToken);
                     objects.Add(obj);
                     Console.WriteLine($"      ✅ Created object {i + 1} with ID: {obj.ObjectId}");
                 }
@@ -190,7 +192,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 Airspeed = 0,
             };
 
-            var aiObject = await client.AIObjects.CreateObjectAsync("BARS_Stopbar_On", position, "Tracking Test", cancellationToken);
+            var aiObject = await client.AIObjects.CreateObjectAsync(TestSimObjectModel, position, "Tracking Test", cancellationToken);
 
             try
             {

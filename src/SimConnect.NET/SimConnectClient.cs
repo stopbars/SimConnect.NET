@@ -362,7 +362,10 @@ namespace SimConnect.NET
                         // Filter out the common "no messages available" error to reduce log spam
                         if (result != -2147467259)
                         {
-                            SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
+                            if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                            {
+                                SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
+                            }
                         }
 
                         return false;
@@ -373,7 +376,10 @@ namespace SimConnect.NET
                         var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
                         var recvId = (SimConnectRecvId)recv.Id;
 
-                        SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
+                        if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                        {
+                            SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
+                        }
 
                         try
                         {

@@ -172,6 +172,15 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 using var shortTimeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(1));
                 using var combined = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shortTimeout.Token);
 
+                // Allow the timeout token to fire before issuing the request so cancellation is guaranteed.
+                await Task.Delay(TimeSpan.FromMilliseconds(15), cancellationToken).ConfigureAwait(false);
+
+                if (!shortTimeout.IsCancellationRequested)
+                {
+                    // In the unlikely event the timer hasn't fired yet (timer resolution quirks), cancel explicitly.
+                    shortTimeout.Cancel();
+                }
+
                 // This should timeout quickly
                 await client.SimVars.GetAsync<double>("PLANE LATITUDE", "degrees", cancellationToken: combined.Token);
 
