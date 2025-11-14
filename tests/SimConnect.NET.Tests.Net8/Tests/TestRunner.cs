@@ -3,6 +3,7 @@
 // </copyright>
 
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using SimConnect.NET;
 
@@ -53,32 +54,19 @@ namespace SimConnect.NET.Tests.Net8.Tests
 
             var runner = new TestRunner();
 
-            try
+            using (var client = new SimConnectClient("SimConnect.NET Enhanced Test Suite"))
             {
-                await runner.RunAllTestsAsync(args);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"💥 Fatal error: {ex.Message}");
-                Environment.Exit(1);
-            }
-            finally
-            {
-                // Ensure cleanup
-                if (runner.client?.IsConnected == true)
-                {
-                    try
-                    {
-                        await runner.client.DisconnectAsync();
-                        Console.WriteLine("🔌 Disconnected from SimConnect");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"⚠️  Error during disconnect: {ex.Message}");
-                    }
-                }
+                runner.client = client;
 
-                runner.client?.Dispose();
+                try
+                {
+                    await runner.RunAllTestsAsync(args);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"💥 Fatal error: {ex.Message}");
+                    Environment.Exit(1);
+                }
             }
 
             Console.WriteLine();
@@ -116,9 +104,9 @@ namespace SimConnect.NET.Tests.Net8.Tests
             var results = new List<TestResult>();
 
             // Run tests
-            foreach (var test in testsToRun)
+            foreach (var resultTask in testsToRun.Select(test => this.RunSingleTestAsync(test)))
             {
-                var result = await this.RunSingleTestAsync(test);
+                var result = await resultTask;
                 results.Add(result);
 
                 if (!result.Passed && options.StopOnFirstFailure)
@@ -219,8 +207,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
             try
             {
                 Console.WriteLine("🔌 Connecting to SimConnect...");
-                this.client = new SimConnectClient("SimConnect.NET Enhanced Test Suite");
-                await this.client.ConnectAsync();
+                await this.client!.ConnectAsync();
 
                 if (!this.client.IsConnected)
                 {

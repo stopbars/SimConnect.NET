@@ -36,8 +36,8 @@ namespace SimConnect.NET.Tests.Net8.Tests
 
                 // Test that we can access managers
                 var simVars = client.SimVars;
-                var aircraft = client.Aircraft;
-                var aiObjects = client.AIObjects;
+                _ = client.Aircraft;
+                _ = client.AIObjects;
 
                 Console.WriteLine("   ✅ All managers accessible");
 

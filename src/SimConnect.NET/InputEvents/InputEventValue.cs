@@ -3,6 +3,7 @@
 // </copyright>
 
 using System;
+using System.Diagnostics;
 using System.Globalization;
 
 namespace SimConnect.NET.InputEvents
@@ -84,10 +85,20 @@ namespace SimConnect.NET.InputEvents
                 value = this.GetDoubleValue();
                 return true;
             }
-            catch
+            catch (InvalidCastException ex)
             {
-                return false;
+                Debug.WriteLine($"[InputEventValue.TryGetDoubleValue] Invalid type conversion: {ex.Message}");
             }
+            catch (FormatException ex)
+            {
+                Debug.WriteLine($"[InputEventValue.TryGetDoubleValue] Invalid format: {ex.Message}");
+            }
+            catch (OverflowException ex)
+            {
+                Debug.WriteLine($"[InputEventValue.TryGetDoubleValue] Value overflow: {ex.Message}");
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -103,15 +114,8 @@ namespace SimConnect.NET.InputEvents
                 return false;
             }
 
-            try
-            {
-                value = this.GetStringValue();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            value = this.GetStringValue();
+            return true;
         }
 
         /// <summary>

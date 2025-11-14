@@ -2,6 +2,8 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
+using System.Linq;
+
 namespace SimConnect.NET.AI
 {
     /// <summary>
@@ -25,17 +27,12 @@ namespace SimConnect.NET.AI
                 typeof(Special),
             };
 
-            foreach (var type in types)
-            {
-                var fields = type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                foreach (var field in fields)
-                {
-                    if (field.FieldType == typeof(string) && field.GetValue(null) is string value)
-                    {
-                        yield return value;
-                    }
-                }
-            }
+            const System.Reflection.BindingFlags bindingFlags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+
+            return types
+                .SelectMany(type => type.GetFields(bindingFlags))
+                .Select(field => field.GetValue(null))
+                .OfType<string>();
         }
 
         /// <summary>

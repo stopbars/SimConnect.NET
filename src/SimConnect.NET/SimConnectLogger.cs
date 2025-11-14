@@ -5,9 +5,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using SimConnect.NET.Internal;
 
 namespace SimConnect.NET
 {
@@ -33,12 +35,12 @@ namespace SimConnect.NET
             try
             {
                 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                var folder = Path.Combine(localAppData, DefaultFolderName);
+                var folder = Path.Join(localAppData, DefaultFolderName);
                 Directory.CreateDirectory(folder);
-                var filePath = Path.Combine(folder, DefaultFileName);
+                var filePath = Path.Join(folder, DefaultFileName);
                 this.sink = new FileLogSink(filePath);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 // Fall back to debug output only if file sink fails.
                 System.Diagnostics.Debug.WriteLine($"SimConnectLogger: Failed to initialize file sink: {ex.Message}");
@@ -122,7 +124,7 @@ namespace SimConnect.NET
                     var oldSink = logger.ExchangeSink(newSink);
                     oldSink?.Dispose();
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                 {
                     System.Diagnostics.Debug.WriteLine($"SimConnectLogger.Configure: Failed to set file sink: {ex.Message}");
                 }
@@ -187,27 +189,27 @@ namespace SimConnect.NET
                 this.queue.CompleteAdding();
                 this.cts.Cancel();
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
-                // ignored
+                System.Diagnostics.Debug.WriteLine($"SimConnectLogger.Dispose: queue shutdown failed: {ex.Message}");
             }
 
             try
             {
                 this.worker.Wait(2000);
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
-                // ignored
+                System.Diagnostics.Debug.WriteLine($"SimConnectLogger.Dispose: worker wait failed: {ex.Message}");
             }
 
             try
             {
                 this.sink?.Dispose();
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
-                // ignored
+                System.Diagnostics.Debug.WriteLine($"SimConnectLogger.Dispose: sink dispose failed: {ex.Message}");
             }
         }
 
@@ -237,9 +239,9 @@ namespace SimConnect.NET
             {
                 this.queue.Add((DateTime.UtcNow, level, message));
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
-                // ignored
+                System.Diagnostics.Debug.WriteLine($"SimConnectLogger.Enqueue failed: {ex.Message}");
             }
         }
 
@@ -249,15 +251,14 @@ namespace SimConnect.NET
         {
             try
             {
-                foreach (var item in this.queue.GetConsumingEnumerable(this.cts.Token))
+                foreach (var line in this.queue.GetConsumingEnumerable(this.cts.Token)
+                    .Select(item => Format(item.TimestampUtc, item.Level, item.Message)))
                 {
-                    var line = Format(item.TimestampUtc, item.Level, item.Message);
-
                     try
                     {
                         this.sink?.WriteLine(line);
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                     {
                         // If sink fails at runtime, try to swap to debug sink.
                         System.Diagnostics.Debug.WriteLine($"SimConnectLogger: Write failed: {ex.Message}");
@@ -274,7 +275,7 @@ namespace SimConnect.NET
             {
                 // Expected during shutdown
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 System.Diagnostics.Debug.WriteLine($"SimConnectLogger worker crashed: {ex.Message}");
             }

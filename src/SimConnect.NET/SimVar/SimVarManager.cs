@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using SimConnect.NET.Internal;
 using SimConnect.NET.SimVar.Internal;
 
 namespace SimConnect.NET.SimVar
@@ -25,6 +26,7 @@ namespace SimConnect.NET.SimVar
         private readonly ConcurrentDictionary<(string Name, string Unit, SimConnectDataType DataType), uint> dataDefinitions = new();
         private readonly ConcurrentDictionary<Type, uint> typeToDefIndex = new();
         private readonly ConcurrentDictionary<uint, Action<IntPtr, ISimVarRequest>> defToParser = new();
+        private readonly ConcurrentDictionary<uint, (Delegate Write, int TotalSize)> defToWriter = new();
         private readonly ConcurrentDictionary<uint, SimVarSubscription> subscriptions = new();
         private readonly object typeDefinitionSync = new();
 
@@ -100,7 +102,7 @@ namespace SimConnect.NET.SimVar
         {
             ObjectDisposedException.ThrowIf(this.disposed, nameof(SimVarManager));
             ArgumentException.ThrowIfNullOrEmpty(simVarName);
-            ArgumentException.ThrowIfNullOrEmpty(unit);
+            ArgumentNullException.ThrowIfNull(unit);
 
             // Try to get definition from registry first
             var definition = SimVarRegistry.Get(simVarName);
@@ -219,6 +221,12 @@ namespace SimConnect.NET.SimVar
                                 return;
                             }
 
+                            if (request is null)
+                            {
+                                SimConnectLogger.Warning($"Pending request entry for RequestId={requestId} was null");
+                                return;
+                            }
+
                             var definitionId = objectData.DefineId;
                             if (!this.defToParser.TryGetValue(definitionId, out var parse))
                             {
@@ -239,7 +247,7 @@ namespace SimConnect.NET.SimVar
                             {
                                 parse(dataPtr, request);
                             }
-                            catch (Exception ex)
+                            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                             {
                                 SimConnectLogger.Error($"Error completing SimVar request (RequestId={requestId}, DefinitionId={definitionId})", ex);
                                 if (request is ISimVarRequest req)
@@ -265,7 +273,7 @@ namespace SimConnect.NET.SimVar
                         break;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 // Log error but don't throw - this shouldn't break the message processing loop
                 SimConnectLogger.Error("Error processing SimVar data", ex);
@@ -353,7 +361,7 @@ namespace SimConnect.NET.SimVar
                     {
                         kvp.Value.Dispose();
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                     {
                         if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                         {
@@ -430,6 +438,18 @@ namespace SimConnect.NET.SimVar
                     }
                 };
                 this.typeToDefIndex[typeof(T)] = definitionId;
+
+                var writerBuild = SimVarFieldWriterFactory.Build<T>(addToDefinition: null);
+                Action<IntPtr, T> write = (basePtr, v) =>
+                {
+                    foreach (var w in writerBuild.Writers)
+                    {
+                        w.WriteFrom(in v, basePtr);
+                    }
+                };
+
+                this.defToWriter[definitionId] = (write, writerBuild.TotalSize);
+
                 return definitionId;
             }
         }
@@ -461,7 +481,7 @@ namespace SimConnect.NET.SimVar
 
                     this.RequestDataOnSimObject(request.RequestId, request.DefinitionId, request.ObjectId, SimConnectPeriod.Never);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                 {
                     if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                     {
@@ -476,6 +496,7 @@ namespace SimConnect.NET.SimVar
         private static SimConnectDataType InferDataType<T>()
         {
             var type = typeof(T);
+            ArgumentNullException.ThrowIfNull(type);
 
             return type switch
             {
@@ -484,6 +505,7 @@ namespace SimConnect.NET.SimVar
                 Type t when t == typeof(float) => SimConnectDataType.FloatSingle,
                 Type t when t == typeof(double) => SimConnectDataType.FloatDouble,
                 Type t when t == typeof(string) => SimConnectDataType.String256, // Default string size
+                Type t when t == typeof(SimConnectDataInitPosition) => SimConnectDataType.InitPosition,
                 Type t when t == typeof(SimConnectDataLatLonAlt) => SimConnectDataType.LatLonAlt,
                 Type t when t == typeof(SimConnectDataXyz) => SimConnectDataType.Xyz,
                 _ => throw new ArgumentException($"Unsupported type for SimVar: {type.Name}"),
@@ -662,7 +684,7 @@ namespace SimConnect.NET.SimVar
                 this.RequestDataOnSimObject(requestId, definitionId, objectId, period);
                 return request;
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 this.pendingRequests.TryRemove(requestId, out _);
                 throw;
@@ -938,20 +960,25 @@ namespace SimConnect.NET.SimVar
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Build writers without re-adding to definition; EnsureTypeDefinition already registered it.
-            var (writers, totalSize) = SimVarFieldWriterFactory.Build<T>(addToDefinition: null);
+            // Use cached write delegate/layout keyed by definitionId (must exist if EnsureTypeDefinition was used)
+            if (!this.defToWriter.TryGetValue(definitionId, out var cache))
+            {
+                throw new InvalidOperationException($"No struct writer found for DefinitionId={definitionId}. EnsureTypeDefinition must be called first.");
+            }
 
             await Task.Run(
                 () =>
                 {
-                    var dataPtr = Marshal.AllocHGlobal(totalSize);
+                    var dataPtr = Marshal.AllocHGlobal(cache.TotalSize);
                     try
                     {
-                        // Fill the buffer in the same order/sizes as the definition
-                        foreach (var w in writers)
+                        // Fill the buffer using the cached writer delegate for this definition
+                        if (cache.Write is not Action<IntPtr, T> write)
                         {
-                            w.WriteFrom(in value, dataPtr);
+                            throw new InvalidOperationException($"Cached writer has unexpected type for DefinitionId={definitionId} and T={typeof(T).Name}.");
                         }
+
+                        write(dataPtr, value);
 
                         var hr = SimConnectNative.SimConnect_SetDataOnSimObject(
                             this.simConnectHandle,
@@ -959,7 +986,7 @@ namespace SimConnect.NET.SimVar
                             objectId,
                             0,
                             1,
-                            (uint)totalSize,
+                            (uint)cache.TotalSize,
                             dataPtr);
 
                         if (hr != (int)SimConnectError.None)

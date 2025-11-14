@@ -10,6 +10,7 @@ using SimConnect.NET.AI;
 using SimConnect.NET.Aircraft;
 using SimConnect.NET.Events;
 using SimConnect.NET.InputEvents;
+using SimConnect.NET.Internal;
 using SimConnect.NET.SimVar;
 
 namespace SimConnect.NET
@@ -293,6 +294,10 @@ namespace SimConnect.NET
                     }
                     catch (OperationCanceledException)
                     {
+                        if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                        {
+                            SimConnectLogger.Debug("Message processing task canceled during disconnect.");
+                        }
                     }
                 }
 
@@ -309,6 +314,10 @@ namespace SimConnect.NET
                 }
                 catch (OperationCanceledException)
                 {
+                    if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                    {
+                        SimConnectLogger.Debug("Reconnect task canceled during disconnect.");
+                    }
                 }
             }
 
@@ -360,12 +369,9 @@ namespace SimConnect.NET
                     if (result != (int)SimConnectError.None)
                     {
                         // Filter out the common "no messages available" error to reduce log spam
-                        if (result != -2147467259)
+                        if (result != -2147467259 && SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                         {
-                            if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
-                            {
-                                SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
-                            }
+                            SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
                         }
 
                         return false;
@@ -385,7 +391,7 @@ namespace SimConnect.NET
                         {
                             this.RawMessageReceived?.Invoke(this, new RawSimConnectMessageEventArgs(ppData, pcbData, recvId));
                         }
-                        catch (Exception hookEx)
+                        catch (Exception hookEx) when (!ExceptionHelper.IsCritical(hookEx))
                         {
                             SimConnectLogger.Warning($"RawMessageReceived hook threw: {hookEx.Message}");
                         }
@@ -445,7 +451,7 @@ namespace SimConnect.NET
                 await this.SimVars.GetAsync<double>("SIMULATION RATE", "number", cancellationToken: cancellationToken).ConfigureAwait(false);
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 this.OnErrorOccurred(SimConnectError.Error, ex, "Connection health check failed");
                 return false;
@@ -484,7 +490,7 @@ namespace SimConnect.NET
 
                 SimConnectLogger.Info($"Processed assigned object ID: RequestId={recvAssignedObjectId.RequestId}, ObjectId={recvAssignedObjectId.ObjectId}");
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing assigned object ID", ex);
             }
@@ -510,7 +516,7 @@ namespace SimConnect.NET
                     this.simObjectManager.ProcessObjectCreationFailed(recvError.SendId, error);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing SimConnect error message", ex);
                 this.OnErrorOccurred(SimConnectError.Error, ex, "Error processing SimConnect error message");
@@ -531,7 +537,7 @@ namespace SimConnect.NET
                 this.isMSFS2024 = recvOpen.ApplicationVersionMajor == 12;
                 SimConnectLogger.Info($"SimConnect OPEN received: AppVersion={recvOpen.ApplicationVersionMajor}.{recvOpen.ApplicationVersionMinor} Build={recvOpen.ApplicationBuildMajor}.{recvOpen.ApplicationBuildMinor} (IsMSFS2024={this.isMSFS2024})");
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing SimConnect OPEN message", ex);
             }
@@ -598,6 +604,10 @@ namespace SimConnect.NET
             }
             catch (OperationCanceledException)
             {
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug("Message processing loop canceled.");
+                }
             }
         }
 
@@ -673,7 +683,7 @@ namespace SimConnect.NET
                         break;
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                 {
                     SimConnectLogger.Warning($"Auto-reconnection attempt {this.reconnectAttempts} failed: {ex.Message}");
                     this.OnErrorOccurred(SimConnectError.Error, ex, $"Auto-reconnection attempt {this.reconnectAttempts}");
