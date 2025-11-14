@@ -6,6 +6,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using SimConnect.NET;
+using SimConnect.NET.Internal;
 
 namespace SimConnect.NET.SimVar.Internal
 {
@@ -96,10 +97,12 @@ namespace SimConnect.NET.SimVar.Internal
                                 // Invoke the user-provided callback with the received value.
                                 state.Callback(state.Value);
                             }
-                            catch
+                            catch (Exception callbackEx) when (!ExceptionHelper.IsCritical(callbackEx))
                             {
-                                // Swallow exceptions from user callbacks to avoid breaking the message loop.
-                                // User code errors should not affect SimConnect processing.
+                                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                                {
+                                    SimConnectLogger.Debug($"SimVar callback suppressed exception: {callbackEx.Message}");
+                                }
                             }
                         },
                         (cb, result),
@@ -137,7 +140,7 @@ namespace SimConnect.NET.SimVar.Internal
 
                 this.SetResult(converted!);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 this.SetException(ex);
             }

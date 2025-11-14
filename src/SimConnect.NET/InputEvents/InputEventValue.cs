@@ -84,10 +84,17 @@ namespace SimConnect.NET.InputEvents
                 value = this.GetDoubleValue();
                 return true;
             }
-            catch
+            catch (InvalidCastException)
             {
-                return false;
             }
+            catch (FormatException)
+            {
+            }
+            catch (OverflowException)
+            {
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -103,15 +110,8 @@ namespace SimConnect.NET.InputEvents
                 return false;
             }
 
-            try
-            {
-                value = this.GetStringValue();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            value = this.GetStringValue();
+            return true;
         }
 
         /// <summary>

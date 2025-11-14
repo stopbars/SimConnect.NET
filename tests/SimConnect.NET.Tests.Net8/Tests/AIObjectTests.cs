@@ -124,10 +124,10 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 {
                     var position = new SimConnectDataInitPosition
                     {
-                        Latitude = currentLat + (0.001 * (i + 1)),
-                        Longitude = currentLon + (0.001 * (i + 1)),
+                        Latitude = currentLat + (0.001 * (double)(i + 1)),
+                        Longitude = currentLon + (0.001 * (double)(i + 1)),
                         Altitude = 100,
-                        Heading = 90 + (i * 30),
+                        Heading = 90.0 + ((double)i * 30.0),
                         OnGround = 1,
                         Airspeed = 0,
                     };

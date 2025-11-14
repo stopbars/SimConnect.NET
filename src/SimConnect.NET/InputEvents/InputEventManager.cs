@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SimConnect.NET.Events;
+using SimConnect.NET.Internal;
 
 namespace SimConnect.NET.InputEvents
 {
@@ -517,7 +518,7 @@ namespace SimConnect.NET.InputEvents
                         break;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing input event data", ex);
             }
@@ -608,17 +609,17 @@ namespace SimConnect.NET.InputEvents
 
                             // For 76-byte structure, we might have additional padding or node names
                             // Let's skip any remaining bytes to get to the next item
-                            var nodeNames = string.Empty; // For now, assume no node names in this structure
                             currentPtr = IntPtr.Add(dataPtr, (int)(i + 1) * (int)actualItemSize);
 
                             // Create descriptor only if we have valid data
                             if (!string.IsNullOrEmpty(name))
                             {
-                                var descriptor = new InputEventDescriptor(name, hash, type, nodeNames);
+                                // Node name parsing not yet understood, so default to empty for now
+                                var descriptor = new InputEventDescriptor(name, hash, type, string.Empty);
                                 descriptors.Add(descriptor);
                             }
                         }
-                        catch (Exception itemEx)
+                        catch (Exception itemEx) when (!ExceptionHelper.IsCritical(itemEx))
                         {
                             SimConnectLogger.Warning($"Error parsing input event item {i}: {itemEx.Message}");
                             break; // Stop processing if we hit an error with an individual item
@@ -635,7 +636,7 @@ namespace SimConnect.NET.InputEvents
                     return;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing enumerate input events", ex);
 
@@ -663,7 +664,7 @@ namespace SimConnect.NET.InputEvents
                     tcs.TrySetResult(recvParams.Value ?? string.Empty);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing enumerate input event params", ex);
             }
@@ -697,8 +698,9 @@ namespace SimConnect.NET.InputEvents
                     default:
                         byte[] defBuf = new byte[payloadSize];
                         Marshal.Copy(pValue, defBuf, 0, defBuf.Length);
-                        value = defBuf;
-                        value = BitConverter.ToDouble(defBuf, 0);
+                        value = payloadSize >= sizeof(double)
+                            ? BitConverter.ToDouble(defBuf, 0)
+                            : defBuf;
                         break;
                 }
 
@@ -713,7 +715,7 @@ namespace SimConnect.NET.InputEvents
                     tcs.TrySetResult(inputEventValue);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing get input event", ex);
             }
@@ -776,7 +778,7 @@ namespace SimConnect.NET.InputEvents
                 // Also raise the general event
                 this.InputEventChanged?.Invoke(this, new InputEventChangedEventArgs(inputEventValue));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing subscribe input event", ex);
             }

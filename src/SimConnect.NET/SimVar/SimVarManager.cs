@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using SimConnect.NET.Internal;
 using SimConnect.NET.SimVar.Internal;
 
 namespace SimConnect.NET.SimVar
@@ -220,6 +221,12 @@ namespace SimConnect.NET.SimVar
                                 return;
                             }
 
+                            if (request is null)
+                            {
+                                SimConnectLogger.Warning($"Pending request entry for RequestId={requestId} was null");
+                                return;
+                            }
+
                             var definitionId = objectData.DefineId;
                             if (!this.defToParser.TryGetValue(definitionId, out var parse))
                             {
@@ -240,7 +247,7 @@ namespace SimConnect.NET.SimVar
                             {
                                 parse(dataPtr, request);
                             }
-                            catch (Exception ex)
+                            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                             {
                                 SimConnectLogger.Error($"Error completing SimVar request (RequestId={requestId}, DefinitionId={definitionId})", ex);
                                 if (request is ISimVarRequest req)
@@ -266,7 +273,7 @@ namespace SimConnect.NET.SimVar
                         break;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 // Log error but don't throw - this shouldn't break the message processing loop
                 SimConnectLogger.Error("Error processing SimVar data", ex);
@@ -354,7 +361,7 @@ namespace SimConnect.NET.SimVar
                     {
                         kvp.Value.Dispose();
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                     {
                         if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                         {
@@ -474,7 +481,7 @@ namespace SimConnect.NET.SimVar
 
                     this.RequestDataOnSimObject(request.RequestId, request.DefinitionId, request.ObjectId, SimConnectPeriod.Never);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
                 {
                     if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                     {
@@ -489,6 +496,7 @@ namespace SimConnect.NET.SimVar
         private static SimConnectDataType InferDataType<T>()
         {
             var type = typeof(T);
+            ArgumentNullException.ThrowIfNull(type);
 
             return type switch
             {
@@ -676,7 +684,7 @@ namespace SimConnect.NET.SimVar
                 this.RequestDataOnSimObject(requestId, definitionId, objectId, period);
                 return request;
             }
-            catch
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 this.pendingRequests.TryRemove(requestId, out _);
                 throw;

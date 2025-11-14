@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2025-11-14
+
+### Added
+
+-   Introduced `ExceptionHelper` and wired it into the client, SimVar manager, logger, and input-event flows so background loops now swallow only non-critical exceptions while allowing fatal runtime issues to surface.
+-   Automatic SimVar type inference now understands `SimConnectDataInitPosition`, letting scalar and struct-based calls pick the correct `SimConnectDataType.InitPosition` without manual annotations.
+
+### Changed
+
+-   Struct-based `SimVars.SetAsync<TStruct>` reuses a cached writer delegate and layout per definition ID (`defToWriter`) and fails fast with a clear error when a writer is missing, keeping writes aligned with the cached reader pipeline.
+-   String fields written through the struct pipeline now emit fixed-size, null-terminated ANSI buffers without intermediate allocations, matching SimConnect’s expectations and avoiding buffer overruns.
+-   Validation and messaging now consistently reference `[SimConnect]` attributes, and `SimVars.SetAsync` switches to `ArgumentNullException` for the `unit` parameter so SimVars that rely on default units (e.g., “INITIAL POSITION”) can be written.
+-   SimConnect client message loops, the SimVar manager, and `SimConnectLogger` gate debug logging with `SimConnectLogger.IsLevelEnabled`, use the shared `ExceptionHelper`, and improve diagnostics (e.g., disconnect/reconnect cancellation messages, suppressed callback logging) for quieter yet more informative logs.
+-   Input event enumeration and value parsing became more defensive: node names default to empty strings, doubles are only decoded when the payload actually contains eight bytes, and `InputEventValue` try-get helpers catch `InvalidCastException`, `FormatException`, and `OverflowException` to prevent spurious crashes.
+-   Integration tests received maintenance—`TestRunner` now reuses a single `SimConnectClient`, AI object tests use double arithmetic for position offsets, and connection tests drop unused locals—leading to steadier end-to-end coverage.
+
+### Fixed
+
+-   Struct writers now enforce cached layouts plus fixed-size ANSI encoding when sending data back to SimConnect, eliminating garbled string fields and layout drift when multiple structs are written in succession.
+-   `SimVarManager` logs and safely ignores null pending-request slots, reports unknown definition IDs cleanly, and surfaces missing struct writers instead of breaking the message loop.
+-   Subscription callbacks dispatched through `SimVarRequest` now log suppressed user exceptions (without crashing the SimConnect thread), improving observability when user code faults.
+
 ## [0.1.16-beta] - 2025-10-20
 
 ### Added

@@ -195,8 +195,6 @@ namespace SimConnect.NET.SimVar.Internal
                 {
                     valueExpr = Expression.Convert(valueExpr, underlying);
                 }
-
-                destFieldType = underlying;
             }
 
             // Finally convert to rawType
