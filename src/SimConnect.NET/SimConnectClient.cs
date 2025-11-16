@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using SimConnect.NET.AI;
 using SimConnect.NET.Aircraft;
 using SimConnect.NET.Events;
+using SimConnect.NET.Facilities;
 using SimConnect.NET.InputEvents;
 using SimConnect.NET.Internal;
 using SimConnect.NET.SimVar;
@@ -31,6 +32,7 @@ namespace SimConnect.NET
         private SimObjectManager? simObjectManager;
         private InputEventManager? inputEventManager;
         private InputGroupManager? inputGroupManager;
+        private FacilityManager? facilityManager;
         private int reconnectAttempts;
         private Task? reconnectTask;
         private CancellationTokenSource? reconnectCancellation;
@@ -194,6 +196,23 @@ namespace SimConnect.NET
         }
 
         /// <summary>
+        /// Gets the facility manager for querying and subscribing to facility data.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
+        public FacilityManager Facilities
+        {
+            get
+            {
+                if (!this.isConnected || this.facilityManager == null)
+                {
+                    throw new InvalidOperationException("Not connected to SimConnect. Call ConnectAsync first.");
+                }
+
+                return this.facilityManager;
+            }
+        }
+
+        /// <summary>
         /// Gets the SimConnect handle for advanced operations.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when not connected to SimConnect.</exception>
@@ -254,6 +273,7 @@ namespace SimConnect.NET
             this.simObjectManager = new SimObjectManager(this);
             this.inputEventManager = new InputEventManager(this.simConnectHandle);
             this.inputGroupManager = new InputGroupManager(this.simConnectHandle);
+            this.facilityManager = new FacilityManager(this.simConnectHandle);
 
             this.messageLoopCancellation = new CancellationTokenSource();
             this.messageProcessingTask = this.StartMessageProcessingLoopAsync(this.messageLoopCancellation.Token);
@@ -276,12 +296,14 @@ namespace SimConnect.NET
             this.simVarManager?.Dispose();
             this.inputEventManager?.Dispose();
             this.inputGroupManager?.Dispose();
+            this.facilityManager?.Dispose();
             this.simObjectManager = null;
             this.isMSFS2024 = false;
             this.simVarManager = null;
             this.aircraftDataManager = null;
             this.inputEventManager = null;
             this.inputGroupManager = null;
+            this.facilityManager = null;
 
             if (this.messageLoopCancellation != null)
             {
@@ -414,6 +436,15 @@ namespace SimConnect.NET
                             case SimConnectRecvId.GetInputEvent:
                             case SimConnectRecvId.SubscribeInputEvent:
                                 this.inputEventManager?.ProcessReceivedData(ppData, pcbData);
+                                break;
+                            case SimConnectRecvId.FacilityMinimalList:
+                                this.facilityManager?.ProcessFacilityMinimalList(ppData);
+                                break;
+                            case SimConnectRecvId.FacilityData:
+                                this.facilityManager?.ProcessFacilityData(ppData);
+                                break;
+                            case SimConnectRecvId.FacilityDataEnd:
+                                this.facilityManager?.ProcessFacilityDataEnd(ppData);
                                 break;
                             case SimConnectRecvId.AirportList:
                             case SimConnectRecvId.VorList:
