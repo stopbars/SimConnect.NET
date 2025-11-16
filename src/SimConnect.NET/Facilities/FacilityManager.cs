@@ -438,9 +438,9 @@ namespace SimConnect.NET.Facilities
 
             internal bool IsComplete => this.expectedPackets != 0 && this.receivedPackets >= this.expectedPackets;
 
-            internal void AddChunk(IReadOnlyList<SimConnectFacilityMinimal> chunk, uint entryNumber, uint outOf)
+            internal void AddChunk(SimConnectFacilityMinimal[] chunk, uint entryNumber, uint outOf)
             {
-                if (chunk.Count > 0)
+                if (chunk.Length > 0)
                 {
                     this.buffer.AddRange(chunk);
                 }
