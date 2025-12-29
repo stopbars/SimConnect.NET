@@ -8,7 +8,7 @@ namespace SimConnect.NET.Events
     /// Provides data for an event that is raised when a Simconnect system event is raised.
     /// </summary>
     /// <remarks>
-    /// Initializes a new instance of the <see cref="SimSystemEventReceivedEventArgs"/> class with the specified event identifier and.
+    /// Initializes a new instance of the <see cref="SimSystemEventReceivedEventArgs"/> class with the specified event identifier and
     /// associated data.
     /// </remarks>
     /// <param name="eventId">The unique identifier for the system event.</param>

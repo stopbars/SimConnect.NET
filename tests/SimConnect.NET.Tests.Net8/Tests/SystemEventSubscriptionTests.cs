@@ -2,6 +2,8 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
+using SimConnect.NET.Events;
+
 namespace SimConnect.NET.Tests.Net8.Tests
 {
     internal class SystemEventSubscriptionTests : ISimConnectTest
@@ -28,7 +30,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 cts.CancelAfter(TimeSpan.FromSeconds(15));
 
                 bool testEventReceived = false;
-                client.SystemEventReceived += (sender, e) =>
+                EventHandler<SimSystemEventReceivedEventArgs> handler = (sender, e) =>
                 {
                     switch (e.EventId)
                     {
@@ -39,21 +41,32 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     }
                 };
 
-                await client.SubscribeToEventAsync("4sec", 100, cts.Token);
+                client.SystemEventReceived += handler;
 
-                Console.WriteLine("Listening for events...");
+                try
+                {
+                    await client.SubscribeToEventAsync("4sec", 100, cts.Token);
 
-                while (!testEventReceived && !cts.Token.IsCancellationRequested)
-                {
-                    await Task.Delay(500, cts.Token);
+                    Console.WriteLine("Listening for events...");
+
+                    while (!testEventReceived && !cts.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(500, cts.Token);
+                    }
+
+                    if (!testEventReceived)
+                    {
+                        Console.WriteLine("   ❌ Did not receive expected system event");
+                        return false;
+                    }
+
+                    Console.WriteLine("   ✅ Received expected system event");
+                    return true;
                 }
-                if (!testEventReceived)
+                finally
                 {
-                    Console.WriteLine("   ❌ Did not receive expected system event");
-                    return false;
+                    client.SystemEventReceived -= handler;
                 }
-                Console.WriteLine("   ✅ Received expected system event");
-                return true;
             }
             catch (OperationCanceledException)
             {

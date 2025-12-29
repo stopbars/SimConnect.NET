@@ -32,6 +32,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 new InputEventValueTests(),
                 new PerformanceTests(),
                 new SystemEventSubscriptionTests(),
+                new SystemEventStateTests(),
             };
         }
 

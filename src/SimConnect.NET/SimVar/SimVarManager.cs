@@ -3,6 +3,7 @@
 // </copyright>
 
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -703,64 +704,84 @@ namespace SimConnect.NET.SimVar
         {
             var request = this.StartRequest<T>(definitionId, objectId, SimConnectPeriod.Once, onValue: null);
 
-            using (cancellationToken.Register(() => this.CancelRequest(request)))
+            CancellationTokenSource? timeoutCts = null;
+            CancellationTokenSource? linkedCts = null;
+            try
             {
-                Task<T> awaited = request.Task;
                 if (this.requestTimeout != Timeout.InfiniteTimeSpan)
                 {
-                    var timeoutTask = Task.Delay(this.requestTimeout, CancellationToken.None);
-                    var completed = await Task.WhenAny(awaited, timeoutTask).ConfigureAwait(false);
-                    if (completed == timeoutTask)
+                    timeoutCts = new CancellationTokenSource(this.requestTimeout);
+                    linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                }
+
+                var combinedToken = linkedCts?.Token ?? cancellationToken;
+
+                using (combinedToken.Register(() => this.CancelRequest(request)))
+                {
+                    try
+                    {
+                        return await request.Task.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
                     {
                         this.pendingRequests.TryRemove(request.RequestId, out _);
                         throw new TimeoutException($"Request '{typeof(T).Name}' timed out after {this.requestTimeout} (RequestId={request.RequestId})");
                     }
                 }
-
-                var value = await awaited.ConfigureAwait(false);
-                return value;
+            }
+            finally
+            {
+                linkedCts?.Dispose();
+                timeoutCts?.Dispose();
             }
         }
 
-        private async Task SetWithDefinitionAsync<T>(SimVarDefinition definition, T value, uint objectId, CancellationToken cancellationToken)
+        private Task SetWithDefinitionAsync<T>(SimVarDefinition definition, T value, uint objectId, CancellationToken cancellationToken)
         {
             var definitionId = this.EnsureDataDefinition(definition, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Offload blocking marshaling + native call to thread-pool so the async method can await
-            await Task.Run(
-                () =>
+            var dataSize = GetDataSize<T>();
+            byte[]? rented = null;
+            GCHandle handle = default;
+
+            try
+            {
+                rented = ArrayPool<byte>.Shared.Rent(dataSize);
+                handle = GCHandle.Alloc(rented, GCHandleType.Pinned);
+                var dataPtr = handle.AddrOfPinnedObject();
+
+                MarshalValue(value, dataPtr);
+
+                var result = SimConnectNative.SimConnect_SetDataOnSimObject(
+                    this.simConnectHandle,
+                    definitionId,
+                    objectId,
+                    0,
+                    1,
+                    (uint)dataSize,
+                    dataPtr);
+
+                if (result != (int)SimConnectError.None)
                 {
-                    // Allocate memory for the value
-                    var dataSize = GetDataSize<T>();
-                    var dataPtr = Marshal.AllocHGlobal(dataSize);
+                    throw new SimConnectException($"Failed to set SimVar {definition.Name}: {(SimConnectError)result}", (SimConnectError)result);
+                }
+            }
+            finally
+            {
+                if (handle.IsAllocated)
+                {
+                    handle.Free();
+                }
 
-                    try
-                    {
-                        // Marshal the value to unmanaged memory
-                        MarshalValue(value, dataPtr);
+                if (rented != null)
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
 
-                        var result = SimConnectNative.SimConnect_SetDataOnSimObject(
-                            this.simConnectHandle,
-                            definitionId,
-                            objectId,
-                            0, // flags
-                            1, // arrayCount
-                            (uint)dataSize,
-                            dataPtr);
-
-                        if (result != (int)SimConnectError.None)
-                        {
-                            throw new SimConnectException($"Failed to set SimVar {definition.Name}: {(SimConnectError)result}", (SimConnectError)result);
-                        }
-                    }
-                    finally
-                    {
-                        Marshal.FreeHGlobal(dataPtr);
-                    }
-                },
-                cancellationToken).ConfigureAwait(false);
+            return Task.CompletedTask;
         }
 
         private uint EnsureDataDefinition(SimVarDefinition definition, CancellationToken cancellationToken)
@@ -955,7 +976,7 @@ namespace SimConnect.NET.SimVar
         /// <summary>
         /// Core handler that writes a struct T using the same field layout as EnsureTypeDefinition created.
         /// </summary>
-        private async Task SetStructAsync<T>(uint definitionId, T value, uint objectId, CancellationToken cancellationToken)
+        private Task SetStructAsync<T>(uint definitionId, T value, uint objectId, CancellationToken cancellationToken)
             where T : struct
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -966,40 +987,51 @@ namespace SimConnect.NET.SimVar
                 throw new InvalidOperationException($"No struct writer found for DefinitionId={definitionId}. EnsureTypeDefinition must be called first.");
             }
 
-            await Task.Run(
-                () =>
+            byte[]? rented = null;
+            GCHandle handle = default;
+
+            try
+            {
+                rented = ArrayPool<byte>.Shared.Rent(cache.TotalSize);
+                handle = GCHandle.Alloc(rented, GCHandleType.Pinned);
+                var dataPtr = handle.AddrOfPinnedObject();
+
+                // Fill the buffer using the cached writer delegate for this definition
+                if (cache.Write is not Action<IntPtr, T> write)
                 {
-                    var dataPtr = Marshal.AllocHGlobal(cache.TotalSize);
-                    try
-                    {
-                        // Fill the buffer using the cached writer delegate for this definition
-                        if (cache.Write is not Action<IntPtr, T> write)
-                        {
-                            throw new InvalidOperationException($"Cached writer has unexpected type for DefinitionId={definitionId} and T={typeof(T).Name}.");
-                        }
+                    throw new InvalidOperationException($"Cached writer has unexpected type for DefinitionId={definitionId} and T={typeof(T).Name}.");
+                }
 
-                        write(dataPtr, value);
+                write(dataPtr, value);
 
-                        var hr = SimConnectNative.SimConnect_SetDataOnSimObject(
-                            this.simConnectHandle,
-                            definitionId,
-                            objectId,
-                            0,
-                            1,
-                            (uint)cache.TotalSize,
-                            dataPtr);
+                var hr = SimConnectNative.SimConnect_SetDataOnSimObject(
+                    this.simConnectHandle,
+                    definitionId,
+                    objectId,
+                    0,
+                    1,
+                    (uint)cache.TotalSize,
+                    dataPtr);
 
-                        if (hr != (int)SimConnectError.None)
-                        {
-                            throw new SimConnectException($"Failed to set struct '{typeof(T).Name}': {(SimConnectError)hr}", (SimConnectError)hr);
-                        }
-                    }
-                    finally
-                    {
-                        Marshal.FreeHGlobal(dataPtr);
-                    }
-                },
-                cancellationToken).ConfigureAwait(false);
+                if (hr != (int)SimConnectError.None)
+                {
+                    throw new SimConnectException($"Failed to set struct '{typeof(T).Name}': {(SimConnectError)hr}", (SimConnectError)hr);
+                }
+            }
+            finally
+            {
+                if (handle.IsAllocated)
+                {
+                    handle.Free();
+                }
+
+                if (rented != null)
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+
+            return Task.CompletedTask;
         }
     }
 }
