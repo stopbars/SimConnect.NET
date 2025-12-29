@@ -2,7 +2,6 @@
 // Copyright (c) BARS. All rights reserved.
 // </copyright>
 
-using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -69,6 +68,31 @@ namespace SimConnect.NET
         /// The underlying memory pointed to by <see cref="RawSimConnectMessageEventArgs.DataPointer"/> is only valid for the duration of the event callback.
         /// </summary>
         public event EventHandler<RawSimConnectMessageEventArgs>? RawMessageReceived;
+
+        /// <summary>
+        /// Occurs when a typed frame system event is received (frame rate and sim speed).
+        /// </summary>
+        public event EventHandler<SimSystemEventFrameEventArgs>? FrameEventReceived;
+
+        /// <summary>
+        /// Occurs when a typed filename-based system event is received (for example FlightLoaded or FlightSaved).
+        /// </summary>
+        public event EventHandler<SimSystemEventFilenameReceivedEventArgs>? FilenameEventReceived;
+
+        /// <summary>
+        /// Occurs when an object add/remove system event is received.
+        /// </summary>
+        public event EventHandler<SimSystemEventObjectAddRemoveEventArgs>? ObjectAddRemoveEventReceived;
+
+        /// <summary>
+        /// Occurs when an extended EX1 system event is received with additional data payload.
+        /// </summary>
+        public event EventHandler<SimSystemEventEx1ReceivedEventArgs>? SystemEventEx1Received;
+
+        /// <summary>
+        /// Occurs when a subscribed event is fired.
+        /// </summary>
+        public event EventHandler<SimSystemEventReceivedEventArgs>? SystemEventReceived;
 
         /// <summary>
         /// Gets a value indicating whether the client is connected to SimConnect.
@@ -346,12 +370,15 @@ namespace SimConnect.NET
         }
 
         /// <summary>
-        /// Processes the next SimConnect message.
+        /// Subscribes to a specific simulator system event.
         /// </summary>
+        /// <param name="systemEventName">The name of the system event (e.g., "SimStart", "4Sec", "Crashed").</param>
+        /// <param name="systemEventId">A user-defined ID to identify this subscription.</param>
         /// <param name="cancellationToken">Cancellation token for the operation.</param>
-        /// <returns>A task that represents the asynchronous message processing operation, returning true if a message was processed.</returns>
-        /// <exception cref="SimConnectException">Thrown when message processing fails.</exception>
-        public async Task<bool> ProcessNextMessageAsync(CancellationToken cancellationToken = default)
+        /// <returns>A task representing the subscription operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when a sim connection wasn't found.</exception>
+        /// <exception cref="SimConnectException">Thrown when the event wasn't subscribed.</exception>
+        public async Task SubscribeToEventAsync(string systemEventName, uint systemEventId, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(this.disposed, nameof(SimConnectClient));
 
@@ -360,76 +387,183 @@ namespace SimConnect.NET
                 throw new InvalidOperationException("Not connected to SimConnect.");
             }
 
-            return await Task.Run(
+            await Task.Run(
                 () =>
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var result = SimConnectNative.SimConnect_GetNextDispatch(this.simConnectHandle, out var ppData, out var pcbData);
+                    var result = SimConnectNative.SimConnect_SubscribeToSystemEvent(
+                        this.simConnectHandle,
+                        systemEventId,
+                        systemEventName);
 
                     if (result != (int)SimConnectError.None)
                     {
-                        // Filter out the common "no messages available" error to reduce log spam
-                        if (result != -2147467259 && SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
-                        {
-                            SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
-                        }
-
-                        return false;
+                        throw new SimConnectException($"Failed to subscribe to event {systemEventName}: {(SimConnectError)result}", (SimConnectError)result);
                     }
-
-                    if (ppData != IntPtr.Zero && pcbData > 0)
-                    {
-                        var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
-                        var recvId = (SimConnectRecvId)recv.Id;
-
-                        if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
-                        {
-                            SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
-                        }
-
-                        try
-                        {
-                            this.RawMessageReceived?.Invoke(this, new RawSimConnectMessageEventArgs(ppData, pcbData, recvId));
-                        }
-                        catch (Exception hookEx) when (!ExceptionHelper.IsCritical(hookEx))
-                        {
-                            SimConnectLogger.Warning($"RawMessageReceived hook threw: {hookEx.Message}");
-                        }
-
-                        switch (recvId)
-                        {
-                            case SimConnectRecvId.AssignedObjectId:
-                                this.ProcessAssignedObjectId(ppData);
-                                break;
-                            case SimConnectRecvId.Exception:
-                                this.ProcessError(ppData);
-                                break;
-                            case SimConnectRecvId.Open:
-                                this.ProcessOpen(ppData);
-                                break;
-                            case SimConnectRecvId.ControllersList:
-                            case SimConnectRecvId.ActionCallback:
-                            case SimConnectRecvId.EnumerateInputEvents:
-                            case SimConnectRecvId.EnumerateInputEventParams:
-                            case SimConnectRecvId.GetInputEvent:
-                            case SimConnectRecvId.SubscribeInputEvent:
-                                this.inputEventManager?.ProcessReceivedData(ppData, pcbData);
-                                break;
-                            case SimConnectRecvId.AirportList:
-                            case SimConnectRecvId.VorList:
-                            case SimConnectRecvId.NdbList:
-                                break;
-                            default:
-                                this.simVarManager?.ProcessReceivedData(ppData, pcbData);
-                                break;
-                        }
-
-                        return true;
-                    }
-
-                    return false;
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Sets the reporting state for a previously subscribed system event.
+        /// </summary>
+        /// <param name="systemEventId">The user-defined ID of the system event.</param>
+        /// <param name="state">The desired reporting state.</param>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>A task representing the state change operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when a sim connection was not found.</exception>
+        /// <exception cref="SimConnectException">Thrown when the state change fails.</exception>
+        public async Task SetSystemEventStateAsync(uint systemEventId, SimConnectState state, CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimConnectClient));
+
+            if (!this.isConnected)
+            {
+                throw new InvalidOperationException("Not connected to SimConnect.");
+            }
+
+            await Task.Run(
+                () =>
+                {
+                    var result = SimConnectNative.SimConnect_SetSystemEventState(
+                        this.simConnectHandle,
+                        systemEventId,
+                        (uint)state);
+
+                    if (result != (int)SimConnectError.None)
+                    {
+                        throw new SimConnectException($"Failed to set system event state for {systemEventId}: {(SimConnectError)result}", (SimConnectError)result);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Unsubscribes from a previously subscribed system event.
+        /// </summary>
+        /// <param name="systemEventId">The user-defined ID of the system event.</param>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>A task representing the unsubscribe operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when a sim connection was not found.</exception>
+        /// <exception cref="SimConnectException">Thrown when the unsubscribe fails.</exception>
+        public async Task UnsubscribeFromEventAsync(uint systemEventId, CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimConnectClient));
+
+            if (!this.isConnected)
+            {
+                throw new InvalidOperationException("Not connected to SimConnect.");
+            }
+
+            await Task.Run(
+                () =>
+                {
+                    var result = SimConnectNative.SimConnect_UnsubscribeFromSystemEvent(
+                        this.simConnectHandle,
+                        systemEventId);
+
+                    if (result != (int)SimConnectError.None)
+                    {
+                        throw new SimConnectException($"Failed to unsubscribe from system event {systemEventId}: {(SimConnectError)result}", (SimConnectError)result);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Processes the next SimConnect message.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>A task that represents the asynchronous message processing operation, returning true if a message was processed.</returns>
+        /// <exception cref="SimConnectException">Thrown when message processing fails.</exception>
+        public Task<bool> ProcessNextMessageAsync(CancellationToken cancellationToken = default)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimConnectClient));
+
+            if (!this.isConnected)
+            {
+                throw new InvalidOperationException("Not connected to SimConnect.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = SimConnectNative.SimConnect_GetNextDispatch(this.simConnectHandle, out var ppData, out var pcbData);
+
+            if (result != (int)SimConnectError.None)
+            {
+                // Filter out the common "no messages available" error to reduce log spam
+                if (result != -2147467259 && SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"SimConnect_GetNextDispatch returned: {(SimConnectError)result}");
+                }
+
+                return Task.FromResult(false);
+            }
+
+            if (ppData != IntPtr.Zero && pcbData > 0)
+            {
+                var recv = Marshal.PtrToStructure<SimConnectRecv>(ppData);
+                var recvId = (SimConnectRecvId)recv.Id;
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Received SimConnect message: Id={recv.Id}, Size={recv.Size}");
+                }
+
+                try
+                {
+                    this.RawMessageReceived?.Invoke(this, new RawSimConnectMessageEventArgs(ppData, pcbData, recvId));
+                }
+                catch (Exception hookEx) when (!ExceptionHelper.IsCritical(hookEx))
+                {
+                    SimConnectLogger.Warning($"RawMessageReceived hook threw: {hookEx.Message}");
+                }
+
+                switch (recvId)
+                {
+                    case SimConnectRecvId.AssignedObjectId:
+                        this.ProcessAssignedObjectId(ppData);
+                        break;
+                    case SimConnectRecvId.Exception:
+                        this.ProcessError(ppData);
+                        break;
+                    case SimConnectRecvId.Open:
+                        this.ProcessOpen(ppData);
+                        break;
+                    case SimConnectRecvId.ControllersList:
+                    case SimConnectRecvId.ActionCallback:
+                    case SimConnectRecvId.EnumerateInputEvents:
+                    case SimConnectRecvId.EnumerateInputEventParams:
+                    case SimConnectRecvId.GetInputEvent:
+                    case SimConnectRecvId.SubscribeInputEvent:
+                        this.inputEventManager?.ProcessReceivedData(ppData, pcbData);
+                        break;
+                    case SimConnectRecvId.AirportList:
+                    case SimConnectRecvId.VorList:
+                    case SimConnectRecvId.NdbList:
+                        break;
+                    case SimConnectRecvId.Event:
+                        this.ProcessSystemEvent(ppData);
+                        break;
+                    case SimConnectRecvId.EventFrame:
+                        this.ProcessSystemEventFrame(ppData);
+                        break;
+                    case SimConnectRecvId.EventFilename:
+                        this.ProcessSystemEventFilename(ppData);
+                        break;
+                    case SimConnectRecvId.EventObjectAddRemove:
+                        this.ProcessSystemEventObjectAddRemove(ppData);
+                        break;
+                    case SimConnectRecvId.EventEx1:
+                        this.ProcessSystemEventEx1(ppData);
+                        break;
+                    default:
+                        this.simVarManager?.ProcessReceivedData(ppData, pcbData);
+                        break;
+                }
+
+                return Task.FromResult(true);
+            }
+
+            return Task.FromResult(false);
         }
 
         /// <summary>
@@ -540,6 +674,129 @@ namespace SimConnect.NET
             catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
                 SimConnectLogger.Error("Error processing SimConnect OPEN message", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes a system event message from SimConnect.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received Event data.</param>
+        private void ProcessSystemEvent(IntPtr ppData)
+        {
+            try
+            {
+                var recvEvent = Marshal.PtrToStructure<SimConnectRecvEvent>(ppData);
+
+                this.SystemEventReceived?.Invoke(this, new SimSystemEventReceivedEventArgs(recvEvent.EventId, recvEvent.Data));
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"System Event Received: ID={recvEvent.EventId} Data={recvEvent.Data}");
+                }
+            }
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
+            {
+                SimConnectLogger.Error("Error processing system event", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes a system frame event message from SimConnect.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received EventFrame data.</param>
+        private void ProcessSystemEventFrame(IntPtr ppData)
+        {
+            try
+            {
+                var recvEventFrame = Marshal.PtrToStructure<SimConnectRecvEventFrame>(ppData);
+
+                this.FrameEventReceived?.Invoke(this, new SimSystemEventFrameEventArgs(recvEventFrame.FrameRate, recvEventFrame.SimSpeed));
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Frame Event Received: FrameRate={recvEventFrame.FrameRate} SimSpeed={recvEventFrame.SimSpeed}");
+                }
+            }
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
+            {
+                SimConnectLogger.Error("Error processing frame system event", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes a system filename event message from SimConnect.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received EventFilename data.</param>
+        private void ProcessSystemEventFilename(IntPtr ppData)
+        {
+            try
+            {
+                var recvEventFilename = Marshal.PtrToStructure<SimConnectRecvEventFilename>(ppData);
+
+                this.FilenameEventReceived?.Invoke(this, new SimSystemEventFilenameReceivedEventArgs(recvEventFilename.FileName, recvEventFilename.Flags));
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Filename Event Received: FileName={recvEventFilename.FileName} Flags={recvEventFilename.Flags}");
+                }
+            }
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
+            {
+                SimConnectLogger.Error("Error processing filename system event", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes an object add/remove system event message from SimConnect.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received EventObjectAddRemove data.</param>
+        private void ProcessSystemEventObjectAddRemove(IntPtr ppData)
+        {
+            try
+            {
+                var recvEventObject = Marshal.PtrToStructure<SimConnectRecvEventObjectAddRemove>(ppData);
+
+                this.ObjectAddRemoveEventReceived?.Invoke(this, new SimSystemEventObjectAddRemoveEventArgs(recvEventObject.EObjType));
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"Object Add/Remove Event Received: Type={recvEventObject.EObjType}");
+                }
+            }
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
+            {
+                SimConnectLogger.Error("Error processing object add/remove system event", ex);
+            }
+        }
+
+        /// <summary>
+        /// Processes an extended EX1 system event message from SimConnect.
+        /// </summary>
+        /// <param name="ppData">Pointer to the received EventEx1 data.</param>
+        private void ProcessSystemEventEx1(IntPtr ppData)
+        {
+            try
+            {
+                var recvEventEx1 = Marshal.PtrToStructure<SimConnectRecvEventEx1>(ppData);
+
+                this.SystemEventEx1Received?.Invoke(
+                    this,
+                    new SimSystemEventEx1ReceivedEventArgs(
+                        recvEventEx1.EventId,
+                        recvEventEx1.Data0,
+                        recvEventEx1.Data1,
+                        recvEventEx1.Data2,
+                        recvEventEx1.Data3,
+                        recvEventEx1.Data4));
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"EX1 System Event Received: EventId={recvEventEx1.EventId} Data=[{recvEventEx1.Data0},{recvEventEx1.Data1},{recvEventEx1.Data2},{recvEventEx1.Data3},{recvEventEx1.Data4}]");
+                }
+            }
+            catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
+            {
+                SimConnectLogger.Error("Error processing EX1 system event", ex);
             }
         }
 

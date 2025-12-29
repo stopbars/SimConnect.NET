@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18] - 2025-12-29
+
+### Added
+
+-   Subscribe to simulator system events via `SimConnectClient.SubscribeToEventAsync` and handle notifications through `SystemEventReceived`, enabling callbacks for SimConnect system events like `4sec` and pause state changes.
+-   Typed system event dispatch and events: `FrameEventReceived`, `FilenameEventReceived`, `ObjectAddRemoveEventReceived`, and `SystemEventEx1Received` now surface frame-rate, filename, object add/remove, and EX1 payloads instead of dropping them.
+-   Helpers to control and clean up subscriptions: `SetSystemEventStateAsync` and `UnsubscribeFromEventAsync` wrap the native APIs for toggling and stopping system event notifications.
+-   Test runner now includes a system-event subscription test and a state toggle test to exercise the full subscribe/on/off/unsubscribe flow.
+-   Bundled `SimConnect.dll` updated to the latest SDK build to align with current simulator versions.
+
+### Performance
+
+-   Message processing loop no longer spins up a worker task per dispatch; `SimConnect_GetNextDispatch` is polled synchronously to reduce context switches and lower idle CPU.
+-   SimVar setters use pooled pinned buffers instead of per-call unmanaged allocations and extra `Task.Run` hops, and request timeouts now rely on linked cancellation sources instead of `Task.Delay`, cutting allocations on hot paths.
+
 ## [0.1.17] - 2025-11-14
 
 ### Added
