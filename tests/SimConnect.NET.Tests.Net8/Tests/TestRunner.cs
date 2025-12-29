@@ -31,6 +31,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 new InputEventTests(),
                 new InputEventValueTests(),
                 new PerformanceTests(),
+                new SystemEventSubscriptionTests(),
             };
         }
 
@@ -142,6 +143,9 @@ namespace SimConnect.NET.Tests.Net8.Tests
                         break;
                     case "--verbose":
                         options.Verbose = true;
+                        break;
+                    case "--test-events":
+                        options.Categories.Add("System Event");
                         break;
                 }
             }
