@@ -3,6 +3,7 @@
 // </copyright>
 
 using System.Collections.Concurrent;
+using System.Reflection;
 using SimConnect.NET.SimVar;
 
 namespace SimConnect.NET.AI
@@ -13,9 +14,20 @@ namespace SimConnect.NET.AI
     /// </summary>
     public class SimObjectManager : IDisposable
     {
+        private static readonly MethodInfo SetAsyncByNameMethod = typeof(SimVarManager)
+            .GetMethods()
+            .Single(method =>
+                method.Name == nameof(SimVarManager.SetAsync) &&
+                method.IsGenericMethodDefinition &&
+                method.GetParameters() is { Length: 5 } parameters &&
+                parameters[0].ParameterType == typeof(string));
+
         private readonly SimConnectClient client;
         private readonly ConcurrentDictionary<uint, SimObject> managedObjects = new();
-        private readonly ConcurrentDictionary<uint, TaskCompletionSource<SimObject>> pendingCreations = new();
+        private readonly ConcurrentDictionary<uint, PendingObjectCreation> pendingCreations = new();
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<uint, SimObject>> objectsByType = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<Type, MethodInfo> setAsyncMethodCache = new();
+        private int activeObjectCount;
         private uint nextRequestId = 50000; // Start at 50000 to avoid conflicts with SimVarManager
         private bool disposed;
 
@@ -37,7 +49,7 @@ namespace SimConnect.NET.AI
         /// <summary>
         /// Gets the count of active objects being managed.
         /// </summary>
-        public int ActiveObjectCount => this.managedObjects.Count(kvp => kvp.Value.IsActive);
+        public int ActiveObjectCount => Volatile.Read(ref this.activeObjectCount);
 
         /// <summary>
         /// Creates a new AI simulation object asynchronously.
@@ -62,10 +74,10 @@ namespace SimConnect.NET.AI
             cancellationToken.ThrowIfCancellationRequested();
 
             var requestId = Interlocked.Increment(ref this.nextRequestId);
-            var tcs = new TaskCompletionSource<SimObject>();
+            var pendingCreation = new PendingObjectCreation(containerTitle, position);
 
             // Store the pending creation request
-            this.pendingCreations[requestId] = tcs;
+            this.pendingCreations[requestId] = pendingCreation;
 
             try
             {
@@ -92,7 +104,7 @@ namespace SimConnect.NET.AI
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(10)); // Reduced from 30 to 10 seconds
 
-                var createdObject = await tcs.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+                var createdObject = await pendingCreation.Completion.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
                 createdObject.UserData = userData;
 
                 SimConnectLogger.Info($"SimObjectManager: Successfully created object {createdObject}");
@@ -149,9 +161,7 @@ namespace SimConnect.NET.AI
                 throw SimConnectErrorMapper.Wrap($"Remove AI object {simObject.ObjectId}", result);
             }
 
-            // Mark object as inactive and remove from tracking
-            simObject.IsActive = false;
-            this.managedObjects.TryRemove(simObject.ObjectId, out _);
+            this.UntrackObject(simObject);
 
             SimConnectLogger.Info($"SimObjectManager: Removed object {simObject}");
         }
@@ -210,9 +220,12 @@ namespace SimConnect.NET.AI
         {
             ArgumentException.ThrowIfNullOrEmpty(containerTitle);
 
-            return this.managedObjects.Values.Where(obj =>
-                obj.IsActive &&
-                string.Equals(obj.ContainerTitle, containerTitle, StringComparison.OrdinalIgnoreCase));
+            if (!this.objectsByType.TryGetValue(containerTitle, out var objects))
+            {
+                return Enumerable.Empty<SimObject>();
+            }
+
+            return objects.Values.Where(static obj => obj.IsActive);
         }
 
         /// <summary>
@@ -263,10 +276,12 @@ namespace SimConnect.NET.AI
 
             var tasks = values.Select(tuple =>
             {
-                // Dynamically invoke generic method based on runtime type of value
-                var method = typeof(SimVarManager).GetMethod("SetAsync")!;
-                var generic = method.MakeGenericMethod(tuple.Value.GetType());
-                return (Task)generic.Invoke(this.client.SimVars, new object[] { tuple.Name, tuple.Unit, tuple.Value, simObject.ObjectId, cancellationToken })!;
+                ArgumentNullException.ThrowIfNull(tuple.Value);
+
+                var generic = this.GetSetAsyncMethod(tuple.Value.GetType());
+                return (Task)generic.Invoke(
+                    this.client.SimVars,
+                    new object[] { tuple.Name, tuple.Unit, tuple.Value, simObject.ObjectId, cancellationToken })!;
             });
 
             return Task.WhenAll(tasks);
@@ -282,11 +297,15 @@ namespace SimConnect.NET.AI
         /// <param name="position">The position where the object was created.</param>
         public void ProcessObjectCreated(uint requestId, uint objectId, string containerTitle, SimConnectDataInitPosition position)
         {
-            if (this.pendingCreations.TryRemove(requestId, out var tcs))
+            if (this.pendingCreations.TryRemove(requestId, out var pendingCreation))
             {
-                var simObject = new SimObject(objectId, containerTitle, requestId, position);
-                this.managedObjects[objectId] = simObject;
-                tcs.SetResult(simObject);
+                var simObject = new SimObject(
+                    objectId,
+                    pendingCreation.ContainerTitle,
+                    requestId,
+                    pendingCreation.Position);
+                this.TrackObject(simObject);
+                pendingCreation.Completion.SetResult(simObject);
 
                 SimConnectLogger.Info($"SimObjectManager: Object creation completed - {simObject}");
             }
@@ -303,9 +322,9 @@ namespace SimConnect.NET.AI
         /// <param name="error">The error that occurred.</param>
         public void ProcessObjectCreationFailed(uint requestId, SimConnectError error)
         {
-            if (this.pendingCreations.TryRemove(requestId, out var tcs))
+            if (this.pendingCreations.TryRemove(requestId, out var pendingCreation))
             {
-                tcs.SetException(SimConnectErrorMapper.Wrap("Object creation", error));
+                pendingCreation.Completion.SetException(SimConnectErrorMapper.Wrap("Object creation", error));
                 SimConnectLogger.Error($"SimObjectManager: Object creation failed for requestId {requestId}: {SimConnectErrorMapper.Format(error)}");
             }
         }
@@ -323,9 +342,9 @@ namespace SimConnect.NET.AI
             try
             {
                 // Cancel all pending operations
-                foreach (var tcs in this.pendingCreations.Values)
+                foreach (var pendingCreation in this.pendingCreations.Values)
                 {
-                    tcs.TrySetCanceled();
+                    pendingCreation.Completion.TrySetCanceled();
                 }
 
                 this.pendingCreations.Clear();
@@ -337,6 +356,8 @@ namespace SimConnect.NET.AI
                 }
 
                 this.managedObjects.Clear();
+                this.objectsByType.Clear();
+                Volatile.Write(ref this.activeObjectCount, 0);
 
                 if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
                 {
@@ -348,6 +369,106 @@ namespace SimConnect.NET.AI
                 this.disposed = true;
                 GC.SuppressFinalize(this);
             }
+        }
+
+        private MethodInfo GetSetAsyncMethod(Type valueType)
+        {
+            return this.setAsyncMethodCache.GetOrAdd(
+                valueType,
+                static type => SetAsyncByNameMethod.MakeGenericMethod(type));
+        }
+
+        private void TrackObject(SimObject simObject)
+        {
+            while (true)
+            {
+                if (this.managedObjects.TryAdd(simObject.ObjectId, simObject))
+                {
+                    this.AddToTypeIndex(simObject);
+                    Interlocked.Increment(ref this.activeObjectCount);
+                    return;
+                }
+
+                if (!this.managedObjects.TryGetValue(simObject.ObjectId, out var existing))
+                {
+                    continue;
+                }
+
+                if (this.managedObjects.TryUpdate(simObject.ObjectId, simObject, existing))
+                {
+                    if (existing.IsActive)
+                    {
+                        existing.IsActive = false;
+                        this.RemoveFromTypeIndex(existing);
+                        Interlocked.Decrement(ref this.activeObjectCount);
+                    }
+
+                    this.AddToTypeIndex(simObject);
+                    Interlocked.Increment(ref this.activeObjectCount);
+                    return;
+                }
+            }
+        }
+
+        private void UntrackObject(SimObject simObject)
+        {
+            if (this.managedObjects.TryRemove(simObject.ObjectId, out var trackedObject))
+            {
+                var wasActive = trackedObject.IsActive;
+                trackedObject.IsActive = false;
+                this.RemoveFromTypeIndex(trackedObject);
+                if (wasActive)
+                {
+                    Interlocked.Decrement(ref this.activeObjectCount);
+                }
+
+                if (!ReferenceEquals(simObject, trackedObject))
+                {
+                    simObject.IsActive = false;
+                }
+
+                return;
+            }
+
+            simObject.IsActive = false;
+        }
+
+        private void AddToTypeIndex(SimObject simObject)
+        {
+            var objects = this.objectsByType.GetOrAdd(
+                simObject.ContainerTitle,
+                static _ => new ConcurrentDictionary<uint, SimObject>());
+
+            objects[simObject.ObjectId] = simObject;
+        }
+
+        private void RemoveFromTypeIndex(SimObject simObject)
+        {
+            if (!this.objectsByType.TryGetValue(simObject.ContainerTitle, out var objects))
+            {
+                return;
+            }
+
+            objects.TryRemove(simObject.ObjectId, out _);
+            if (objects.IsEmpty)
+            {
+                this.objectsByType.TryRemove(new KeyValuePair<string, ConcurrentDictionary<uint, SimObject>>(simObject.ContainerTitle, objects));
+            }
+        }
+
+        private sealed class PendingObjectCreation
+        {
+            public PendingObjectCreation(string containerTitle, SimConnectDataInitPosition position)
+            {
+                this.ContainerTitle = containerTitle;
+                this.Position = position;
+            }
+
+            public string ContainerTitle { get; }
+
+            public SimConnectDataInitPosition Position { get; }
+
+            public TaskCompletionSource<SimObject> Completion { get; } = new();
         }
     }
 }

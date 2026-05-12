@@ -41,6 +41,12 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     return false;
                 }
 
+                // Test fixed-size string fetching
+                if (!await TestStringFetching(client, cts.Token))
+                {
+                    return false;
+                }
+
                 // Test SimVar setting
                 if (!await TestSimVarSetting(client, cts.Token))
                 {
@@ -140,6 +146,28 @@ namespace SimConnect.NET.Tests.Net8.Tests
             // Test bool (as int)
             var onGround = await client.SimVars.GetAsync<int>("SIM ON GROUND", "Bool", cancellationToken: cancellationToken);
             Console.WriteLine($"      🛬 On ground: {onGround == 1}");
+
+            return true;
+        }
+
+        private static async Task<bool> TestStringFetching(SimConnectClient client, CancellationToken cancellationToken)
+        {
+            Console.WriteLine("   🔍 Testing fixed-size string fetching...");
+
+            var title = await client.SimVars.GetAsync<string>("TITLE", cancellationToken: cancellationToken);
+            Console.WriteLine($"      ✈️ Aircraft title: {title}");
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                Console.WriteLine("   ❌ Aircraft title was empty");
+                return false;
+            }
+
+            if (title.Contains('\0'))
+            {
+                Console.WriteLine("   ❌ Aircraft title contained null padding");
+                return false;
+            }
 
             return true;
         }

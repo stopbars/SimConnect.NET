@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-12
+
+### Performance
+
+-   Numeric SimVar field reads now use direct unmanaged reads in the internal memory reader, reducing overhead on scalar response parsing.
+-   Fixed-size SimVar string reads now scan unmanaged buffers with `ReadOnlySpan<byte>`, avoiding repeated marshal calls while preserving bounded null-terminated reads.
+-   AI object tracking now maintains an active-object counter and a case-insensitive container-title index, avoiding full dictionary scans for `ActiveObjectCount` and `GetObjectsByType`.
+-   Batched AI object SimVar writes now cache closed generic `SetAsync<T>` methods instead of rebuilding reflection metadata for every value.
+
+### Fixed
+
+-   AI object creation now preserves the requested container title and initial position from the pending creation request when SimConnect returns only the request and object IDs.
+-   AI object removal now keeps managed-object tracking, the type index, and active counts synchronized across object-instance, object-ID, remove-all, and dispose paths.
+
+### Tests
+
+-   Added SimVar string-fetch coverage for aircraft titles to verify fixed-size string responses do not include any trailing null padding.
+-   Expanded AI object integration tests to verify active counts, type lookups, metadata preservation, case-insensitive container-title matching, remove-by-ID cleanup, and repeated removal behavior.
+
 ## [0.2.0] - 2026-05-12
 
 ### Added

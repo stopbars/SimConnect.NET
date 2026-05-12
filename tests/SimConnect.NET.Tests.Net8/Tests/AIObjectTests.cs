@@ -94,6 +94,22 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 return false;
             }
 
+            if (client.AIObjects.ActiveObjectCount != 1)
+            {
+                Console.WriteLine($"   ❌ Expected 1 active object after create, got {client.AIObjects.ActiveObjectCount}");
+                return false;
+            }
+
+            if (!ValidateCreatedObjectMetadata(aiObject, TestSimObjectModel, position))
+            {
+                return false;
+            }
+
+            if (!ValidateTypeLookup(client, TestSimObjectModel, aiObject, expectedCount: 1))
+            {
+                return false;
+            }
+
             // Wait a moment, then remove it
             await Task.Delay(1000, cancellationToken);
             await client.AIObjects.RemoveObjectAsync(aiObject, cancellationToken);
@@ -102,6 +118,17 @@ namespace SimConnect.NET.Tests.Net8.Tests
             if (aiObject.IsActive)
             {
                 Console.WriteLine("   ❌ Removed object should not be active");
+                return false;
+            }
+
+            if (client.AIObjects.ActiveObjectCount != 0)
+            {
+                Console.WriteLine($"   ❌ Expected 0 active objects after remove, got {client.AIObjects.ActiveObjectCount}");
+                return false;
+            }
+
+            if (!ValidateTypeLookup(client, TestSimObjectModel, aiObject, expectedCount: 0))
+            {
                 return false;
             }
 
@@ -135,6 +162,17 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     var obj = await client.AIObjects.CreateObjectAsync(TestSimObjectModel, position, $"Test Object {i}", cancellationToken);
                     objects.Add(obj);
                     Console.WriteLine($"      ✅ Created object {i + 1} with ID: {obj.ObjectId}");
+
+                    if (client.AIObjects.ActiveObjectCount != objects.Count)
+                    {
+                        Console.WriteLine($"   ❌ Expected {objects.Count} active objects after create, got {client.AIObjects.ActiveObjectCount}");
+                        return false;
+                    }
+
+                    if (!ValidateCreatedObjectMetadata(obj, TestSimObjectModel, position))
+                    {
+                        return false;
+                    }
                 }
 
                 Console.WriteLine($"      📊 Created {objects.Count} objects");
@@ -146,6 +184,11 @@ namespace SimConnect.NET.Tests.Net8.Tests
                     return false;
                 }
 
+                if (!ValidateTypeLookup(client, TestSimObjectModel, objects, expectedCount: objects.Count))
+                {
+                    return false;
+                }
+
                 // Remove all objects
                 await client.AIObjects.RemoveAllObjectsAsync(cancellationToken);
                 Console.WriteLine("      ✅ All objects removed");
@@ -154,6 +197,11 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 if (client.AIObjects.ActiveObjectCount != 0)
                 {
                     Console.WriteLine($"   ❌ Expected 0 active objects after cleanup, got {client.AIObjects.ActiveObjectCount}");
+                    return false;
+                }
+
+                if (!ValidateTypeLookup(client, TestSimObjectModel, objects, expectedCount: 0))
+                {
                     return false;
                 }
 
@@ -212,6 +260,28 @@ namespace SimConnect.NET.Tests.Net8.Tests
 
                 Console.WriteLine($"      ✅ Object tracking verified: ID {aiObject.ObjectId}");
 
+                if (!ValidateCreatedObjectMetadata(aiObject, TestSimObjectModel, position))
+                {
+                    return false;
+                }
+
+                if (!ValidateTypeLookup(client, TestSimObjectModel, aiObject, expectedCount: 1))
+                {
+                    return false;
+                }
+
+                if (!ValidateTypeLookup(client, TestSimObjectModel.ToUpperInvariant(), aiObject, expectedCount: 1))
+                {
+                    Console.WriteLine("   ❌ Type lookup should be case-insensitive");
+                    return false;
+                }
+
+                if (client.AIObjects.GetObjectsByType("DefinitelyNotACoffeeCup").Any())
+                {
+                    Console.WriteLine("   ❌ Unknown object type lookup should be empty");
+                    return false;
+                }
+
                 // Test user data
                 if (retrievedObject.UserData?.ToString() != "Tracking Test")
                 {
@@ -221,12 +291,104 @@ namespace SimConnect.NET.Tests.Net8.Tests
 
                 Console.WriteLine("      ✅ User data preserved correctly");
 
+                var removed = await client.AIObjects.RemoveObjectAsync(aiObject.ObjectId, cancellationToken);
+                if (!removed)
+                {
+                    Console.WriteLine("   ❌ Remove by object ID returned false for tracked object");
+                    return false;
+                }
+
+                if (aiObject.IsActive)
+                {
+                    Console.WriteLine("   ❌ Remove by object ID should mark object inactive");
+                    return false;
+                }
+
+                if (client.AIObjects.GetObject(aiObject.ObjectId) != null)
+                {
+                    Console.WriteLine("   ❌ Removed object should not be retrievable by ID");
+                    return false;
+                }
+
+                if (!ValidateTypeLookup(client, TestSimObjectModel, aiObject, expectedCount: 0))
+                {
+                    return false;
+                }
+
+                var removedAgain = await client.AIObjects.RemoveObjectAsync(aiObject.ObjectId, cancellationToken);
+                if (removedAgain)
+                {
+                    Console.WriteLine("   ❌ Remove by object ID should return false after cleanup");
+                    return false;
+                }
+
+                Console.WriteLine("      ✅ Remove by ID cleaned up tracking correctly");
                 return true;
             }
             finally
             {
-                await client.AIObjects.RemoveObjectAsync(aiObject, cancellationToken);
+                if (aiObject.IsActive)
+                {
+                    await client.AIObjects.RemoveObjectAsync(aiObject, cancellationToken);
+                }
             }
+        }
+
+        private static bool ValidateCreatedObjectMetadata(SimObject aiObject, string expectedContainerTitle, SimConnectDataInitPosition expectedPosition)
+        {
+            if (aiObject.ContainerTitle != expectedContainerTitle)
+            {
+                Console.WriteLine($"   ❌ Expected container title '{expectedContainerTitle}', got '{aiObject.ContainerTitle}'");
+                return false;
+            }
+
+            if (aiObject.RequestId == 0)
+            {
+                Console.WriteLine("   ❌ Created object should preserve its request ID");
+                return false;
+            }
+
+            if (Math.Abs(aiObject.InitialPosition.Latitude - expectedPosition.Latitude) > double.Epsilon ||
+                Math.Abs(aiObject.InitialPosition.Longitude - expectedPosition.Longitude) > double.Epsilon ||
+                Math.Abs(aiObject.InitialPosition.Altitude - expectedPosition.Altitude) > double.Epsilon ||
+                Math.Abs(aiObject.InitialPosition.Heading - expectedPosition.Heading) > double.Epsilon ||
+                aiObject.InitialPosition.OnGround != expectedPosition.OnGround ||
+                aiObject.InitialPosition.Airspeed != expectedPosition.Airspeed)
+            {
+                Console.WriteLine("   ❌ Created object should preserve its requested initial position");
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool ValidateTypeLookup(SimConnectClient client, string containerTitle, SimObject expectedObject, int expectedCount)
+        {
+            return ValidateTypeLookup(client, containerTitle, new[] { expectedObject }, expectedCount);
+        }
+
+        private static bool ValidateTypeLookup(SimConnectClient client, string containerTitle, IEnumerable<SimObject> expectedObjects, int expectedCount)
+        {
+            var objectsByType = client.AIObjects.GetObjectsByType(containerTitle).ToList();
+            if (objectsByType.Count != expectedCount)
+            {
+                Console.WriteLine($"   ❌ Expected {expectedCount} objects for type '{containerTitle}', got {objectsByType.Count}");
+                return false;
+            }
+
+            if (expectedCount > 0)
+            {
+                var expectedIds = expectedObjects.Select(static obj => obj.ObjectId).ToHashSet();
+                var actualIds = objectsByType.Select(static obj => obj.ObjectId).ToHashSet();
+                if (!expectedIds.SetEquals(actualIds))
+                {
+                    Console.WriteLine($"   ❌ Type lookup for '{containerTitle}' returned the wrong object IDs");
+                    return false;
+                }
+            }
+
+            Console.WriteLine($"      ✅ Type lookup for '{containerTitle}' returned {objectsByType.Count} object(s)");
+            return true;
         }
     }
 }
