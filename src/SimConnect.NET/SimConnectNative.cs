@@ -12,6 +12,9 @@ namespace SimConnect.NET
 {
     internal static class SimConnectNative
     {
+        internal const int DispatchNoMessageAvailableHResult = unchecked((int)0x80004005);
+        internal const uint SimConnectUnused = uint.MaxValue;
+
         public delegate void SimConnectDispatchProc(IntPtr pData, uint cbData, IntPtr context);
 
         [DllImport("SimConnect.dll")]
@@ -170,7 +173,7 @@ namespace SimConnect.NET
             [MarshalAs(UnmanagedType.LPStr)] string unitsName,
             uint datumType = 4,
             float fEpsilon = 0,
-            uint datumId = 0xFFFFFFFFu);
+            uint datumId = SimConnectUnused);
 
         [DllImport("SimConnect.dll")]
         public static extern int SimConnect_SetClientData(
@@ -449,7 +452,7 @@ namespace SimConnect.NET
             [MarshalAs(UnmanagedType.LPStr)] string pszInputDefinition,
             uint downEventID,
             uint downValue = 0,
-            uint upEventID = uint.MaxValue, // SIMCONNECT_UNUSED
+            uint upEventID = SimConnectUnused,
             uint upValue = 0,
             bool bMaskable = false);
 

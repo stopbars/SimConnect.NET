@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-12
+
+### Added
+
+-   `SimConnectClient` now implements `IAsyncDisposable`, allowing consumers to await disconnect and cleanup without blocking on async shutdown work.
+
+### Changed
+
+-   Native SimConnect calls now flow through a shared internal dispatcher so client, SimVar, AI object, input event, and input group operations serialize access to the underlying handle.
+-   Disconnect and disposal now cancel and await message processing/reconnect tasks before closing the native handle, and intentional disconnects no longer trigger auto-reconnect.
+-   Error logging and exceptions now use the shared `SimConnectErrorMapper` formatting helpers for consistent native-result messages across API surfaces.
+-   Internal SimConnect constants now centralize `SIMCONNECT_UNUSED` and the no-dispatch-message HRESULT instead of repeating magic values.
+-   Bundled `SimConnect.dll` updated to the latest SDK build.
+
+### Fixed
+
+-   Fixed fixed-size ANSI string reads in struct SimVar responses so values stop at the first null terminator instead of including trailing null padding.
+
 ## [0.1.18] - 2025-12-29
 
 ### Added

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using SimConnect.NET.Internal;
 
 namespace SimConnect.NET.InputEvents
 {
@@ -15,6 +16,7 @@ namespace SimConnect.NET.InputEvents
     public sealed class InputGroupManager : IDisposable
     {
         private readonly IntPtr simConnectHandle;
+        private readonly SimConnectNativeDispatcher nativeDispatcher;
         private readonly ConcurrentDictionary<uint, InputGroup> inputGroups;
         private readonly object lockObject = new object();
         private uint nextGroupId = 1;
@@ -24,9 +26,11 @@ namespace SimConnect.NET.InputEvents
         /// Initializes a new instance of the <see cref="InputGroupManager"/> class.
         /// </summary>
         /// <param name="simConnectHandle">The SimConnect handle.</param>
-        internal InputGroupManager(IntPtr simConnectHandle)
+        /// <param name="nativeDispatcher">Dispatcher used to serialize native SimConnect calls.</param>
+        internal InputGroupManager(IntPtr simConnectHandle, SimConnectNativeDispatcher nativeDispatcher)
         {
             this.simConnectHandle = simConnectHandle;
+            this.nativeDispatcher = nativeDispatcher ?? throw new ArgumentNullException(nameof(nativeDispatcher));
             this.inputGroups = new ConcurrentDictionary<uint, InputGroup>();
         }
 
@@ -47,13 +51,13 @@ namespace SimConnect.NET.InputEvents
             var groupId = this.GetNextGroupId();
             var inputGroup = new InputGroup(groupId, name, priority);
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_SetInputGroupPriority(this.simConnectHandle, groupId, (uint)priority);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to set input group priority: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Set input group priority", result);
                 }
             },
                 cancellationToken).ConfigureAwait(false);
@@ -75,13 +79,13 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputGroupManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_SetInputGroupPriority(this.simConnectHandle, groupId, (uint)priority);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to set input group priority: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Set input group priority", result);
                 }
 
                 if (this.inputGroups.TryGetValue(groupId, out var group))
@@ -105,13 +109,13 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputGroupManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_SetInputGroupState(this.simConnectHandle, groupId, enabled ? 1u : 0u);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to set input group state: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Set input group state", result);
                 }
 
                 if (this.inputGroups.TryGetValue(groupId, out var group))
@@ -134,13 +138,13 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputGroupManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_ClearInputGroup(this.simConnectHandle, groupId);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to clear input group: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Clear input group", result);
                 }
 
                 if (this.inputGroups.TryGetValue(groupId, out var group))
@@ -165,13 +169,13 @@ namespace SimConnect.NET.InputEvents
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(inputDefinition);
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_RemoveInputEvent(this.simConnectHandle, groupId, inputDefinition);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to remove input event: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Remove input event", result);
                 }
 
                 if (this.inputGroups.TryGetValue(groupId, out var group))

@@ -22,6 +22,7 @@ namespace SimConnect.NET.InputEvents
     public sealed class InputEventManager : IDisposable
     {
         private readonly IntPtr simConnectHandle;
+        private readonly SimConnectNativeDispatcher nativeDispatcher;
         private readonly ConcurrentDictionary<uint, TaskCompletionSource<InputEventDescriptor[]>> pendingEnumerationRequests;
         private readonly ConcurrentDictionary<uint, TaskCompletionSource<string>> pendingParameterRequests;
         private readonly ConcurrentDictionary<uint, TaskCompletionSource<InputEventValue>> pendingGetRequests;
@@ -34,9 +35,11 @@ namespace SimConnect.NET.InputEvents
         /// Initializes a new instance of the <see cref="InputEventManager"/> class.
         /// </summary>
         /// <param name="simConnectHandle">The SimConnect handle.</param>
-        internal InputEventManager(IntPtr simConnectHandle)
+        /// <param name="nativeDispatcher">Dispatcher used to serialize native SimConnect calls.</param>
+        internal InputEventManager(IntPtr simConnectHandle, SimConnectNativeDispatcher nativeDispatcher)
         {
             this.simConnectHandle = simConnectHandle;
+            this.nativeDispatcher = nativeDispatcher ?? throw new ArgumentNullException(nameof(nativeDispatcher));
             this.pendingEnumerationRequests = new ConcurrentDictionary<uint, TaskCompletionSource<InputEventDescriptor[]>>();
             this.pendingParameterRequests = new ConcurrentDictionary<uint, TaskCompletionSource<string>>();
             this.pendingGetRequests = new ConcurrentDictionary<uint, TaskCompletionSource<InputEventValue>>();
@@ -59,13 +62,13 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_EnumerateControllers(this.simConnectHandle);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to enumerate controllers: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Enumerate controllers", result);
                 }
             },
                 cancellationToken).ConfigureAwait(false);
@@ -88,13 +91,13 @@ namespace SimConnect.NET.InputEvents
 
             try
             {
-                await Task.Run(
+                await this.nativeDispatcher.InvokeAsync(
                     () =>
                 {
                     var result = SimConnectNative.SimConnect_EnumerateInputEvents(this.simConnectHandle, requestId);
                     if (result != (int)SimConnectError.None)
                     {
-                        throw new SimConnectException($"Failed to enumerate input events: {(SimConnectError)result}", (SimConnectError)result);
+                        throw SimConnectErrorMapper.Wrap("Enumerate input events", result);
                     }
                 },
                     cancellationToken).ConfigureAwait(false);
@@ -128,13 +131,13 @@ namespace SimConnect.NET.InputEvents
 
             try
             {
-                await Task.Run(
+                await this.nativeDispatcher.InvokeAsync(
                     () =>
                 {
                     var result = SimConnectNative.SimConnect_EnumerateInputEventParams(this.simConnectHandle, requestId);
                     if (result != (int)SimConnectError.None)
                     {
-                        throw new SimConnectException($"Failed to enumerate input event parameters: {(SimConnectError)result}", (SimConnectError)result);
+                        throw SimConnectErrorMapper.Wrap("Enumerate input event parameters", result);
                     }
                 },
                     cancellationToken).ConfigureAwait(false);
@@ -168,13 +171,13 @@ namespace SimConnect.NET.InputEvents
 
             try
             {
-                await Task.Run(
+                await this.nativeDispatcher.InvokeAsync(
                     () =>
                 {
                     var result = SimConnectNative.SimConnect_GetInputEvent(this.simConnectHandle, requestId, hash);
                     if (result != (int)SimConnectError.None)
                     {
-                        throw new SimConnectException($"Failed to get input event: {(SimConnectError)result}", (SimConnectError)result);
+                        throw SimConnectErrorMapper.Wrap("Get input event", result);
                     }
                 },
                     cancellationToken).ConfigureAwait(false);
@@ -205,7 +208,7 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var valueBytes = BitConverter.GetBytes(value);
@@ -216,7 +219,7 @@ namespace SimConnect.NET.InputEvents
                     var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (ulong)hash, (uint)valueBytes.Length, valuePtr);
                     if (result != (int)SimConnectError.None)
                     {
-                        throw new SimConnectException($"Failed to set input event: {(SimConnectError)result}", (SimConnectError)result);
+                        throw SimConnectErrorMapper.Wrap("Set input event", result);
                     }
                 }
                 finally
@@ -241,7 +244,7 @@ namespace SimConnect.NET.InputEvents
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(value);
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var valueBytes = System.Text.Encoding.UTF8.GetBytes(value + '\0'); // Null terminate
@@ -252,7 +255,7 @@ namespace SimConnect.NET.InputEvents
                     var result = SimConnectNative.SimConnect_SetInputEvent(this.simConnectHandle, (ulong)hash, (uint)valueBytes.Length, valuePtr);
                     if (result != (int)SimConnectError.None)
                     {
-                        throw new SimConnectException($"Failed to set input event: {(SimConnectError)result}", (SimConnectError)result);
+                        throw SimConnectErrorMapper.Wrap("Set input event", result);
                     }
                 }
                 finally
@@ -277,13 +280,13 @@ namespace SimConnect.NET.InputEvents
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(callback);
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_SubscribeInputEvent(this.simConnectHandle, hash);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to subscribe to input event: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Subscribe to input event", result);
                 }
 
                 this.inputEventSubscriptions[hash] = callback;
@@ -303,13 +306,13 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_UnsubscribeInputEvent(this.simConnectHandle, hash);
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to unsubscribe from input event: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Unsubscribe from input event", result);
                 }
 
                 this.inputEventSubscriptions.TryRemove(hash, out _);
@@ -344,7 +347,7 @@ namespace SimConnect.NET.InputEvents
             cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(inputDefinition);
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_MapInputEventToClientEvent_EX1(
@@ -353,13 +356,13 @@ namespace SimConnect.NET.InputEvents
                     inputDefinition,
                     downEventId,
                     downValue,
-                    upEventId ?? uint.MaxValue, // SIMCONNECT_UNUSED
+                    upEventId ?? SimConnectNative.SimConnectUnused,
                     upValue,
                     maskable);
 
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to map input event to client event: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Map input event to client event", result);
                 }
             },
                 cancellationToken).ConfigureAwait(false);
@@ -387,7 +390,7 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_TransmitClientEvent(
@@ -400,7 +403,7 @@ namespace SimConnect.NET.InputEvents
 
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to transmit client event: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Transmit client event", result);
                 }
             },
                 cancellationToken).ConfigureAwait(false);
@@ -436,7 +439,7 @@ namespace SimConnect.NET.InputEvents
             ObjectDisposedException.ThrowIf(this.disposed, nameof(InputEventManager));
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.Run(
+            await this.nativeDispatcher.InvokeAsync(
                 () =>
             {
                 var result = SimConnectNative.SimConnect_TransmitClientEvent_EX1(
@@ -453,7 +456,7 @@ namespace SimConnect.NET.InputEvents
 
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to transmit client event (EX1): {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap("Transmit client event (EX1)", result);
                 }
             },
                 cancellationToken).ConfigureAwait(false);

@@ -8,12 +8,12 @@ SimConnect.NET is currently in beta development. APIs may change, features may b
 
 ## Features
 
--   **Async/Await Support**: Modern asynchronous patterns for all SimConnect operations
--   **High-Level Abstractions**: Simplified API for common flight simulation tasks
--   **Type-Safe Interface**: Strong typing with automatic data type inference
--   **Real-Time Data**: Efficient aircraft data monitoring and SimVar access
--   **AI Object Management**: Create and manage AI aircraft and objects
--   **Multi-Framework Support**: Compatible with .NET 8.0 and .NET 9.0
+- **Async/Await Support**: Modern asynchronous patterns for all SimConnect operations
+- **High-Level Abstractions**: Simplified API for common flight simulation tasks
+- **Type-Safe Interface**: Strong typing with automatic data type inference
+- **Real-Time Data**: Efficient aircraft data monitoring and SimVar access
+- **AI Object Management**: Create and manage AI aircraft and objects
+- **Multi-Framework Support**: Compatible with .NET 8.0 and .NET 9.0
 
 ## Quick Start
 
@@ -41,9 +41,9 @@ SimConnect.NET is currently in beta development. APIs may change, features may b
 
 ## Requirements
 
--   Microsoft Flight Simulator 2020 or later
--   .NET 8.0 or .NET 9.0 runtime
--   SimConnect SDK (included with Flight Simulator)
+- Microsoft Flight Simulator 2020 or later
+- .NET 8.0 or .NET 9.0 runtime
+- SimConnect SDK (included with Flight Simulator)
 
 ## Documentation
 

@@ -25,7 +25,17 @@ namespace SimConnect.NET.SimVar.Internal
 
         public static int ReadInt32(IntPtr addr) => Marshal.ReadInt32(addr);
 
-        public static string ReadFixedString(IntPtr addr, int size) =>
-            Marshal.PtrToStringAnsi(addr, size)?.TrimEnd('\0') ?? string.Empty;
+        public static string ReadFixedString(IntPtr addr, int size)
+        {
+            int length = 0;
+            while (length < size && Marshal.ReadByte(addr, length) != 0)
+            {
+                length++;
+            }
+
+            return length == 0
+                ? string.Empty
+                : Marshal.PtrToStringAnsi(addr, length) ?? string.Empty;
+        }
     }
 }

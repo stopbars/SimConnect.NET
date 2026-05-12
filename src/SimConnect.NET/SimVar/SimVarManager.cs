@@ -23,6 +23,7 @@ namespace SimConnect.NET.SimVar
         private const uint BaseRequestId = 20000;
 
         private readonly IntPtr simConnectHandle;
+        private readonly SimConnectNativeDispatcher nativeDispatcher;
         private readonly ConcurrentDictionary<uint, ISimVarRequest> pendingRequests = new();
         private readonly ConcurrentDictionary<(string Name, string Unit, SimConnectDataType DataType), uint> dataDefinitions = new();
         private readonly ConcurrentDictionary<Type, uint> typeToDefIndex = new();
@@ -30,6 +31,7 @@ namespace SimConnect.NET.SimVar
         private readonly ConcurrentDictionary<uint, (Delegate Write, int TotalSize)> defToWriter = new();
         private readonly ConcurrentDictionary<uint, SimVarSubscription> subscriptions = new();
         private readonly object typeDefinitionSync = new();
+        private readonly bool ownsNativeDispatcher;
 
         // Removed reflection caches by switching to ISimVarRequest hot-path
         private uint nextDefinitionId;
@@ -42,8 +44,25 @@ namespace SimConnect.NET.SimVar
         /// </summary>
         /// <param name="simConnectHandle">The SimConnect handle.</param>
         public SimVarManager(IntPtr simConnectHandle)
+            : this(simConnectHandle, new SimConnectNativeDispatcher(), ownsNativeDispatcher: true)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SimVarManager"/> class.
+        /// </summary>
+        /// <param name="simConnectHandle">The SimConnect handle.</param>
+        /// <param name="nativeDispatcher">Dispatcher used to serialize native SimConnect calls.</param>
+        internal SimVarManager(IntPtr simConnectHandle, SimConnectNativeDispatcher nativeDispatcher)
+            : this(simConnectHandle, nativeDispatcher, ownsNativeDispatcher: false)
+        {
+        }
+
+        private SimVarManager(IntPtr simConnectHandle, SimConnectNativeDispatcher nativeDispatcher, bool ownsNativeDispatcher)
         {
             this.simConnectHandle = simConnectHandle != IntPtr.Zero ? simConnectHandle : throw new ArgumentException("Invalid SimConnect handle", nameof(simConnectHandle));
+            this.nativeDispatcher = nativeDispatcher ?? throw new ArgumentNullException(nameof(nativeDispatcher));
+            this.ownsNativeDispatcher = ownsNativeDispatcher;
             this.nextDefinitionId = BaseDefinitionId;
             this.nextRequestId = BaseRequestId;
         }
@@ -380,6 +399,11 @@ namespace SimConnect.NET.SimVar
 
                 this.pendingRequests.Clear();
                 this.dataDefinitions.Clear();
+
+                if (this.ownsNativeDispatcher)
+                {
+                    this.nativeDispatcher.Dispose();
+                }
             }
         }
 
@@ -412,16 +436,17 @@ namespace SimConnect.NET.SimVar
                 var readers = SimVarFieldReaderFactory.Build<T>(
                     (name, unit, dataType) =>
                     {
-                        var hr = SimConnectNative.SimConnect_AddToDataDefinition(
-                            this.simConnectHandle,
-                            definitionId,
-                            name,
-                            unit ?? string.Empty,
-                            (uint)dataType);
+                        var hr = this.nativeDispatcher.Invoke(
+                            () => SimConnectNative.SimConnect_AddToDataDefinition(
+                                this.simConnectHandle,
+                                definitionId,
+                                name,
+                                unit ?? string.Empty,
+                                (uint)dataType));
 
                         if (hr != (int)SimConnectError.None)
                         {
-                            throw new SimConnectException($"Failed to add data definition for {name}: {(SimConnectError)hr}", (SimConnectError)hr);
+                            throw SimConnectErrorMapper.Wrap($"Add data definition for {name}", hr);
                         }
                     });
 
@@ -641,12 +666,13 @@ namespace SimConnect.NET.SimVar
             uint objectId,
             SimConnectPeriod period)
         {
-            var hr = SimConnectNative.SimConnect_RequestDataOnSimObject(
-                this.simConnectHandle,
-                requestId,
-                definitionId,
-                objectId,
-                (uint)period);
+            var hr = this.nativeDispatcher.Invoke(
+                () => SimConnectNative.SimConnect_RequestDataOnSimObject(
+                    this.simConnectHandle,
+                    requestId,
+                    definitionId,
+                    objectId,
+                    (uint)period));
 
             // Build a local context string from parameters for logging and exceptions
             var localContext = period != SimConnectPeriod.Once && period != SimConnectPeriod.Never
@@ -655,7 +681,7 @@ namespace SimConnect.NET.SimVar
 
             if (hr != (int)SimConnectError.None && period != SimConnectPeriod.Never)
             {
-                throw new SimConnectException($"Failed to {localContext}: {(SimConnectError)hr}", (SimConnectError)hr);
+                throw SimConnectErrorMapper.Wrap(localContext, hr);
             }
         }
 
@@ -754,18 +780,19 @@ namespace SimConnect.NET.SimVar
 
                 MarshalValue(value, dataPtr);
 
-                var result = SimConnectNative.SimConnect_SetDataOnSimObject(
-                    this.simConnectHandle,
-                    definitionId,
-                    objectId,
-                    0,
-                    1,
-                    (uint)dataSize,
-                    dataPtr);
+                var result = this.nativeDispatcher.Invoke(
+                    () => SimConnectNative.SimConnect_SetDataOnSimObject(
+                        this.simConnectHandle,
+                        definitionId,
+                        objectId,
+                        0,
+                        1,
+                        (uint)dataSize,
+                        dataPtr));
 
                 if (result != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to set SimVar {definition.Name}: {(SimConnectError)result}", (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap($"Set SimVar {definition.Name}", result);
                 }
             }
             finally
@@ -854,16 +881,17 @@ namespace SimConnect.NET.SimVar
                 SimConnectLogger.Debug($"Creating new definition ID {definitionId} for {name}|{unit}");
             }
 
-            var result = SimConnectNative.SimConnect_AddToDataDefinition(
-                this.simConnectHandle,
-                definitionId,
-                name,
-                unit,
-                (uint)dataType);
+            var result = this.nativeDispatcher.Invoke(
+                () => SimConnectNative.SimConnect_AddToDataDefinition(
+                    this.simConnectHandle,
+                    definitionId,
+                    name,
+                    unit,
+                    (uint)dataType));
 
             if (result != (int)SimConnectError.None)
             {
-                throw new SimConnectException($"Failed to add data definition for {name}: {(SimConnectError)result}", (SimConnectError)result);
+                throw SimConnectErrorMapper.Wrap($"Add data definition for {name}", result);
             }
 
             this.defToParser[definitionId] = (IntPtr ptr, ISimVarRequest req) =>
@@ -1004,18 +1032,19 @@ namespace SimConnect.NET.SimVar
 
                 write(dataPtr, value);
 
-                var hr = SimConnectNative.SimConnect_SetDataOnSimObject(
-                    this.simConnectHandle,
-                    definitionId,
-                    objectId,
-                    0,
-                    1,
-                    (uint)cache.TotalSize,
-                    dataPtr);
+                var hr = this.nativeDispatcher.Invoke(
+                    () => SimConnectNative.SimConnect_SetDataOnSimObject(
+                        this.simConnectHandle,
+                        definitionId,
+                        objectId,
+                        0,
+                        1,
+                        (uint)cache.TotalSize,
+                        dataPtr));
 
                 if (hr != (int)SimConnectError.None)
                 {
-                    throw new SimConnectException($"Failed to set struct '{typeof(T).Name}': {(SimConnectError)hr}", (SimConnectError)hr);
+                    throw SimConnectErrorMapper.Wrap($"Set struct '{typeof(T).Name}'", hr);
                 }
             }
             finally

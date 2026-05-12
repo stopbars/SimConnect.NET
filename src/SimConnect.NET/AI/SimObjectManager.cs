@@ -69,18 +69,18 @@ namespace SimConnect.NET.AI
 
             try
             {
-                var result = SimConnectNative.SimConnect_AICreateSimulatedObject(
-                    this.client.Handle,
-                    containerTitle,
-                    position,
-                    requestId);
+                var result = await this.client.InvokeNativeAsync(
+                    handle => SimConnectNative.SimConnect_AICreateSimulatedObject(
+                        handle,
+                        containerTitle,
+                        position,
+                        requestId),
+                    cancellationToken).ConfigureAwait(false);
 
                 if (result != (int)SimConnectError.None)
                 {
                     this.pendingCreations.TryRemove(requestId, out _);
-                    throw new SimConnectException(
-                        $"Failed to create AI object '{containerTitle}': {(SimConnectError)result}",
-                        (SimConnectError)result);
+                    throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", result);
                 }
 
                 if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
@@ -106,7 +106,7 @@ namespace SimConnect.NET.AI
             catch (Exception ex) when (ex is not SimConnectException)
             {
                 this.pendingCreations.TryRemove(requestId, out _);
-                throw new SimConnectException($"Unexpected error creating AI object '{containerTitle}': {ex.Message}", SimConnectError.Error, ex);
+                throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", SimConnectError.Error, ex);
             }
         }
 
@@ -119,7 +119,7 @@ namespace SimConnect.NET.AI
         /// <exception cref="ObjectDisposedException">Thrown when the manager has been disposed.</exception>
         /// <exception cref="SimConnectException">Thrown when object removal fails.</exception>
         /// <exception cref="ArgumentNullException">Thrown when simObject is null.</exception>
-        public Task RemoveObjectAsync(SimObject simObject, CancellationToken cancellationToken = default)
+        public async Task RemoveObjectAsync(SimObject simObject, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(this.disposed, nameof(SimObjectManager));
             ArgumentNullException.ThrowIfNull(simObject);
@@ -131,22 +131,22 @@ namespace SimConnect.NET.AI
                     SimConnectLogger.Debug($"SimObjectManager: Object {simObject.ObjectId} is already inactive");
                 }
 
-                return Task.CompletedTask;
+                return;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
 
             var requestId = Interlocked.Increment(ref this.nextRequestId);
-            var result = SimConnectNative.SimConnect_AIRemoveObject(
-                this.client.Handle,
-                simObject.ObjectId,
-                requestId);
+            var result = await this.client.InvokeNativeAsync(
+                handle => SimConnectNative.SimConnect_AIRemoveObject(
+                    handle,
+                    simObject.ObjectId,
+                    requestId),
+                cancellationToken).ConfigureAwait(false);
 
             if (result != (int)SimConnectError.None)
             {
-                throw new SimConnectException(
-                    $"Failed to remove AI object {simObject.ObjectId}: {(SimConnectError)result}",
-                    (SimConnectError)result);
+                throw SimConnectErrorMapper.Wrap($"Remove AI object {simObject.ObjectId}", result);
             }
 
             // Mark object as inactive and remove from tracking
@@ -154,7 +154,6 @@ namespace SimConnect.NET.AI
             this.managedObjects.TryRemove(simObject.ObjectId, out _);
 
             SimConnectLogger.Info($"SimObjectManager: Removed object {simObject}");
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -306,8 +305,8 @@ namespace SimConnect.NET.AI
         {
             if (this.pendingCreations.TryRemove(requestId, out var tcs))
             {
-                tcs.SetException(new SimConnectException($"Object creation failed: {error}", error));
-                SimConnectLogger.Error($"SimObjectManager: Object creation failed for requestId {requestId}: {error}");
+                tcs.SetException(SimConnectErrorMapper.Wrap("Object creation", error));
+                SimConnectLogger.Error($"SimObjectManager: Object creation failed for requestId {requestId}: {SimConnectErrorMapper.Format(error)}");
             }
         }
 

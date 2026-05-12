@@ -64,12 +64,45 @@ namespace SimConnect.NET
         }
 
         /// <summary>
+        /// Converts a native SimConnect return value to the corresponding error code.
+        /// </summary>
+        /// <param name="result">The native return value.</param>
+        /// <returns>The corresponding SimConnect error code.</returns>
+        public static SimConnectError ToError(int result) => (SimConnectError)result;
+
+        /// <summary>
+        /// Formats a SimConnect error code for logs and exception messages.
+        /// </summary>
+        /// <param name="code">The error code.</param>
+        /// <returns>A consistent error string containing the code and mapped description.</returns>
+        public static string Format(SimConnectError code) => $"{code} - {Describe(code)}";
+
+        /// <summary>
+        /// Formats a native SimConnect return value for logs and exception messages.
+        /// </summary>
+        /// <param name="result">The native return value.</param>
+        /// <returns>A consistent error string containing the code and mapped description.</returns>
+        public static string Format(int result) => Format(ToError(result));
+
+        /// <summary>
         /// Creates a SimConnectException with a mapped message and optional inner exception.
         /// </summary>
         public static SimConnectException Wrap(string operation, SimConnectError code, Exception? inner = null)
         {
-            var message = $"{operation} failed: {code} - {Describe(code)}";
+            var message = $"{operation} failed: {Format(code)}";
             return inner == null ? new SimConnectException(message, code) : new SimConnectException(message, code, inner);
+        }
+
+        /// <summary>
+        /// Creates a SimConnectException from a native SimConnect return value.
+        /// </summary>
+        /// <param name="operation">The operation that failed.</param>
+        /// <param name="result">The native return value.</param>
+        /// <param name="inner">The optional inner exception.</param>
+        /// <returns>A SimConnectException with a mapped message.</returns>
+        public static SimConnectException Wrap(string operation, int result, Exception? inner = null)
+        {
+            return Wrap(operation, ToError(result), inner);
         }
     }
 }
