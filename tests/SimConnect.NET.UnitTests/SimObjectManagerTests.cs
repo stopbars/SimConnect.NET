@@ -103,4 +103,31 @@ public sealed class SimObjectManagerTests
         Assert.Equal(123u, created.ObjectId);
         Assert.False(manager.TryResolveRequestId(nativeSendId, out _));
     }
+
+    /// <summary>
+    /// Verifies creation can complete when native packet correlation is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task SuccessWithoutPacketMappingStillCompletes()
+    {
+        uint clientRequestId = 0;
+        var nativeCallCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var client = new SimConnectClient("Unit test");
+        using var manager = new SimObjectManager(
+            client,
+            (title, livery, position, requestId, registerPacketId, cancellationToken) =>
+            {
+                clientRequestId = requestId;
+                nativeCallCompleted.SetResult();
+                return Task.FromResult((int)SimConnectError.None);
+            },
+            TimeSpan.FromSeconds(10));
+
+        var creation = manager.CreateObjectAsync("CoffeeCup", default);
+        await nativeCallCompleted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        manager.ProcessObjectCreated(clientRequestId, 123, string.Empty, default);
+
+        var created = await creation;
+        Assert.Equal(123u, created.ObjectId);
+    }
 }

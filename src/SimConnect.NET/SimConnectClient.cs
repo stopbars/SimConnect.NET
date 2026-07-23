@@ -661,7 +661,7 @@ namespace SimConnect.NET
                 throw new InvalidOperationException("Simulator identification is unavailable because SimConnect is not connected.");
             }
 
-            return await identification.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+            return await identification.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>

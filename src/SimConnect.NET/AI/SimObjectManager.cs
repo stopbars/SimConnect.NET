@@ -487,8 +487,13 @@ namespace SimConnect.NET.AI
                     {
                         registerPacketId(sendId, requestId);
                     }
+                    else
+                    {
+                        SimConnectLogger.Warning(
+                            $"SimObjectManager: Created object request {requestId}, but packet ID lookup failed: {SimConnectErrorMapper.Format(packetIdResult)}. Server errors cannot be correlated for this request.");
+                    }
 
-                    return packetIdResult;
+                    return (int)SimConnectError.None;
                 },
                 cancellationToken).ConfigureAwait(false);
         }
