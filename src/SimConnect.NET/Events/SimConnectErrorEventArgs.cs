@@ -18,12 +18,22 @@ namespace SimConnect.NET.Events
         /// <param name="exception">The exception that was thrown, if any.</param>
         /// <param name="context">Additional context about when/where the error occurred.</param>
         /// <param name="timestamp">The timestamp when the error occurred.</param>
-        public SimConnectErrorEventArgs(SimConnectError error, Exception? exception = null, string? context = null, DateTime? timestamp = null)
+        /// <param name="sendId">The native packet ID associated with the error.</param>
+        /// <param name="index">The one-based index of the parameter associated with the error.</param>
+        public SimConnectErrorEventArgs(
+            SimConnectError error,
+            Exception? exception = null,
+            string? context = null,
+            DateTime? timestamp = null,
+            uint? sendId = null,
+            uint? index = null)
         {
             this.Error = error;
             this.Exception = exception;
             this.Context = context ?? string.Empty;
             this.Timestamp = timestamp ?? DateTime.UtcNow;
+            this.SendId = sendId;
+            this.Index = index;
         }
 
         /// <summary>
@@ -45,6 +55,16 @@ namespace SimConnect.NET.Events
         /// Gets the timestamp when the error occurred.
         /// </summary>
         public DateTime Timestamp { get; }
+
+        /// <summary>
+        /// Gets the native packet ID associated with the error, when supplied by SimConnect.
+        /// </summary>
+        public uint? SendId { get; }
+
+        /// <summary>
+        /// Gets the one-based parameter index associated with the error, when supplied by SimConnect.
+        /// </summary>
+        public uint? Index { get; }
 
         /// <summary>
         /// Gets a value indicating whether this error is recoverable.
