@@ -283,6 +283,14 @@ namespace SimConnect.NET
             uint requestId);
 
         [DllImport("SimConnect.dll")]
+        public static extern int SimConnect_AICreateSimulatedObject_EX1(
+            IntPtr hSimConnect,
+            [MarshalAs(UnmanagedType.LPStr)] string szContainerTitle,
+            [MarshalAs(UnmanagedType.LPStr)] string szLivery,
+            SimConnectDataInitPosition initPos,
+            uint requestId);
+
+        [DllImport("SimConnect.dll")]
         public static extern int SimConnect_AIReleaseControl(
             IntPtr hSimConnect,
             uint objectId,

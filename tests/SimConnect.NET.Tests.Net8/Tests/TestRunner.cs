@@ -28,6 +28,7 @@ namespace SimConnect.NET.Tests.Net8.Tests
                 new SimVarTests(),
                 new AircraftTests(),
                 new AIObjectTests(),
+                new SimObjectCreationDiagnosticTests(),
                 new InputEventTests(),
                 new InputEventValueTests(),
                 new PerformanceTests(),
@@ -72,8 +73,11 @@ namespace SimConnect.NET.Tests.Net8.Tests
             }
 
             Console.WriteLine();
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            if (!args.Contains("--no-wait", StringComparer.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Press any key to exit...");
+                Console.ReadKey();
+            }
         }
 
         /// <summary>

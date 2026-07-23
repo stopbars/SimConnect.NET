@@ -8,6 +8,14 @@ using SimConnect.NET.SimVar;
 
 namespace SimConnect.NET.AI
 {
+    internal delegate Task<int> ObjectCreationInvoker(
+        string containerTitle,
+        string livery,
+        SimConnectDataInitPosition position,
+        uint requestId,
+        Action<uint, uint> registerPacketId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Manages creation, tracking, and removal of AI simulation objects.
     /// Provides a high-level interface for spawning and managing objects in the simulation.
@@ -23,8 +31,12 @@ namespace SimConnect.NET.AI
                 parameters[0].ParameterType == typeof(string));
 
         private readonly SimConnectClient client;
+        private readonly ObjectCreationInvoker objectCreationInvoker;
+        private readonly TimeSpan objectCreationTimeout;
         private readonly ConcurrentDictionary<uint, SimObject> managedObjects = new();
         private readonly ConcurrentDictionary<uint, PendingObjectCreation> pendingCreations = new();
+        private readonly ConcurrentDictionary<uint, uint> requestIdsBySendId = new();
+        private readonly ConcurrentDictionary<uint, uint> sendIdsByRequestId = new();
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<uint, SimObject>> objectsByType = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<Type, MethodInfo> setAsyncMethodCache = new();
         private int activeObjectCount;
@@ -36,9 +48,19 @@ namespace SimConnect.NET.AI
         /// </summary>
         /// <param name="client">The SimConnect client instance.</param>
         public SimObjectManager(SimConnectClient client)
+            : this(client, null, TimeSpan.FromSeconds(10))
+        {
+        }
+
+        internal SimObjectManager(
+            SimConnectClient client,
+            ObjectCreationInvoker? objectCreationInvoker,
+            TimeSpan objectCreationTimeout)
         {
             ArgumentNullException.ThrowIfNull(client);
             this.client = client;
+            this.objectCreationInvoker = objectCreationInvoker ?? this.InvokeObjectCreationAsync;
+            this.objectCreationTimeout = objectCreationTimeout;
         }
 
         /// <summary>
@@ -68,58 +90,27 @@ namespace SimConnect.NET.AI
             object? userData = null,
             CancellationToken cancellationToken = default)
         {
-            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimObjectManager));
-            ArgumentException.ThrowIfNullOrEmpty(containerTitle);
+            return await this.CreateObjectCoreAsync(containerTitle, string.Empty, position, userData, cancellationToken).ConfigureAwait(false);
+        }
 
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var requestId = Interlocked.Increment(ref this.nextRequestId);
-            var pendingCreation = new PendingObjectCreation(containerTitle, position);
-
-            // Store the pending creation request
-            this.pendingCreations[requestId] = pendingCreation;
-
-            try
-            {
-                var result = await this.client.InvokeNativeAsync(
-                    handle => SimConnectNative.SimConnect_AICreateSimulatedObject(
-                        handle,
-                        containerTitle,
-                        position,
-                        requestId),
-                    cancellationToken).ConfigureAwait(false);
-
-                if (result != (int)SimConnectError.None)
-                {
-                    this.pendingCreations.TryRemove(requestId, out _);
-                    throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", result);
-                }
-
-                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
-                {
-                    SimConnectLogger.Debug($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
-                }
-
-                // Wait for the object creation to complete with shorter timeout
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10)); // Reduced from 30 to 10 seconds
-
-                var createdObject = await pendingCreation.Completion.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
-                createdObject.UserData = userData;
-
-                SimConnectLogger.Info($"SimObjectManager: Successfully created object {createdObject}");
-                return createdObject;
-            }
-            catch (OperationCanceledException)
-            {
-                this.pendingCreations.TryRemove(requestId, out _);
-                throw;
-            }
-            catch (Exception ex) when (ex is not SimConnectException)
-            {
-                this.pendingCreations.TryRemove(requestId, out _);
-                throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", SimConnectError.Error, ex);
-            }
+        /// <summary>
+        /// Creates a new AI simulation object with an MSFS 2024 modular-object livery.
+        /// </summary>
+        /// <param name="containerTitle">The container title (case-sensitive).</param>
+        /// <param name="livery">The modular SimObject livery name or folder name.</param>
+        /// <param name="position">The initial position and orientation.</param>
+        /// <param name="userData">Optional user data to associate with the object.</param>
+        /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <returns>The created simulation object.</returns>
+        public Task<SimObject> CreateObjectWithLiveryAsync(
+            string containerTitle,
+            string livery,
+            SimConnectDataInitPosition position,
+            object? userData = null,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(livery);
+            return this.CreateObjectCoreAsync(containerTitle, livery, position, userData, cancellationToken);
         }
 
         /// <summary>
@@ -299,6 +290,7 @@ namespace SimConnect.NET.AI
         {
             if (this.pendingCreations.TryRemove(requestId, out var pendingCreation))
             {
+                this.RemovePacketMapping(requestId);
                 var simObject = new SimObject(
                     objectId,
                     pendingCreation.ContainerTitle,
@@ -320,13 +312,22 @@ namespace SimConnect.NET.AI
         /// </summary>
         /// <param name="requestId">The request ID that failed.</param>
         /// <param name="error">The error that occurred.</param>
-        public void ProcessObjectCreationFailed(uint requestId, SimConnectError error)
+        /// <param name="sendId">The native packet ID that failed.</param>
+        /// <param name="index">The one-based index of the parameter that failed.</param>
+        /// <returns>The exception used to complete the pending operation, or null if the request was not pending.</returns>
+        public SimConnectException? ProcessObjectCreationFailed(uint requestId, SimConnectError error, uint sendId = 0, uint index = 0)
         {
             if (this.pendingCreations.TryRemove(requestId, out var pendingCreation))
             {
-                pendingCreation.Completion.SetException(SimConnectErrorMapper.Wrap("Object creation", error));
-                SimConnectLogger.Error($"SimObjectManager: Object creation failed for requestId {requestId}: {SimConnectErrorMapper.Format(error)}");
+                this.RemovePacketMapping(requestId);
+                var operation = $"Create AI object '{pendingCreation.ContainerTitle}' (requestId={requestId}, sendId={sendId}, index={index})";
+                var exception = SimConnectErrorMapper.Wrap(operation, error);
+                pendingCreation.Completion.TrySetException(exception);
+                SimConnectLogger.Error($"SimObjectManager: {operation} failed: {SimConnectErrorMapper.Format(error)}");
+                return exception;
             }
+
+            return null;
         }
 
         /// <summary>
@@ -348,6 +349,8 @@ namespace SimConnect.NET.AI
                 }
 
                 this.pendingCreations.Clear();
+                this.requestIdsBySendId.Clear();
+                this.sendIdsByRequestId.Clear();
 
                 // Mark all objects as inactive (don't remove from sim since we're disposing)
                 foreach (var obj in this.managedObjects.Values)
@@ -371,11 +374,143 @@ namespace SimConnect.NET.AI
             }
         }
 
+        internal bool TryResolveRequestId(uint sendId, out uint requestId)
+        {
+            return this.requestIdsBySendId.TryGetValue(sendId, out requestId);
+        }
+
         private MethodInfo GetSetAsyncMethod(Type valueType)
         {
             return this.setAsyncMethodCache.GetOrAdd(
                 valueType,
                 static type => SetAsyncByNameMethod.MakeGenericMethod(type));
+        }
+
+        private async Task<SimObject> CreateObjectCoreAsync(
+            string containerTitle,
+            string livery,
+            SimConnectDataInitPosition position,
+            object? userData,
+            CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, nameof(SimObjectManager));
+            ArgumentException.ThrowIfNullOrEmpty(containerTitle);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var requestId = Interlocked.Increment(ref this.nextRequestId);
+            var pendingCreation = new PendingObjectCreation(containerTitle, position);
+            this.pendingCreations[requestId] = pendingCreation;
+
+            try
+            {
+                var result = await this.objectCreationInvoker(
+                    containerTitle,
+                    livery,
+                    position,
+                    requestId,
+                    this.RegisterPacketId,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (result != (int)SimConnectError.None)
+                {
+                    this.RemovePendingCreation(requestId);
+                    throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", result);
+                }
+
+                if (SimConnectLogger.IsLevelEnabled(SimConnectLogger.LogLevel.Debug))
+                {
+                    SimConnectLogger.Debug($"SimObjectManager: Requested creation of '{containerTitle}' with requestId {requestId}");
+                }
+
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(this.objectCreationTimeout);
+
+                SimObject createdObject;
+                try
+                {
+                    createdObject = await pendingCreation.Completion.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"Create AI object '{containerTitle}' timed out after {this.objectCreationTimeout.TotalSeconds:0.###} seconds.", ex);
+                }
+
+                createdObject.UserData = userData;
+                SimConnectLogger.Info($"SimObjectManager: Successfully created object {createdObject}");
+                return createdObject;
+            }
+            catch (OperationCanceledException)
+            {
+                this.RemovePendingCreation(requestId);
+                throw;
+            }
+            catch (TimeoutException)
+            {
+                this.RemovePendingCreation(requestId);
+                throw;
+            }
+            catch (Exception ex) when (ex is not SimConnectException)
+            {
+                this.RemovePendingCreation(requestId);
+                throw SimConnectErrorMapper.Wrap($"Create AI object '{containerTitle}'", SimConnectError.Error, ex);
+            }
+        }
+
+        private async Task<int> InvokeObjectCreationAsync(
+            string containerTitle,
+            string livery,
+            SimConnectDataInitPosition position,
+            uint requestId,
+            Action<uint, uint> registerPacketId,
+            CancellationToken cancellationToken)
+        {
+            var useExtendedApi = await this.client.GetIsMSFS2024Async(cancellationToken).ConfigureAwait(false);
+            if (!useExtendedApi && !string.IsNullOrEmpty(livery))
+            {
+                throw new NotSupportedException("SimObject liveries require MSFS 2024 and SimConnect_AICreateSimulatedObject_EX1.");
+            }
+
+            return await this.client.InvokeNativeAsync(
+                handle =>
+                {
+                    var result = useExtendedApi
+                        ? SimConnectNative.SimConnect_AICreateSimulatedObject_EX1(handle, containerTitle, livery, position, requestId)
+                        : SimConnectNative.SimConnect_AICreateSimulatedObject(handle, containerTitle, position, requestId);
+                    if (result != (int)SimConnectError.None)
+                    {
+                        return result;
+                    }
+
+                    var packetIdResult = SimConnectNative.SimConnect_GetLastSentPacketID(handle, out var sendId);
+                    if (packetIdResult == (int)SimConnectError.None)
+                    {
+                        registerPacketId(sendId, requestId);
+                    }
+
+                    return packetIdResult;
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        private void RegisterPacketId(uint sendId, uint requestId)
+        {
+            this.requestIdsBySendId[sendId] = requestId;
+            this.sendIdsByRequestId[requestId] = sendId;
+        }
+
+        private void RemovePendingCreation(uint requestId)
+        {
+            this.pendingCreations.TryRemove(requestId, out _);
+            this.RemovePacketMapping(requestId);
+        }
+
+        private void RemovePacketMapping(uint requestId)
+        {
+            if (this.sendIdsByRequestId.TryRemove(requestId, out var sendId))
+            {
+                this.requestIdsBySendId.TryRemove(new KeyValuePair<uint, uint>(sendId, requestId));
+            }
         }
 
         private void TrackObject(SimObject simObject)
@@ -468,7 +603,7 @@ namespace SimConnect.NET.AI
 
             public SimConnectDataInitPosition Position { get; }
 
-            public TaskCompletionSource<SimObject> Completion { get; } = new();
+            public TaskCompletionSource<SimObject> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
     }
 }

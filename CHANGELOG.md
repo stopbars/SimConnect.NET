@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-23
+
+### Added
+
+-   Added MSFS 2024 modular SimObject livery support through `CreateObjectWithLiveryAsync` and the extended SimConnect object-creation API.
+-   Added native send ID and parameter index details to `SimConnectErrorEventArgs` for richer error diagnostics.
+-   Added a controlled SimObject creation diagnostic and a dedicated unit-test project covering creation success, failure correlation, timeout, and cleanup.
+
+### Changed
+
+-   AI object creation now correlates client request IDs with SimConnect packet IDs so server-side failures complete the correct pending operation immediately.
+-   Simulator identification is now awaited before selecting the MSFS 2020 or MSFS 2024 object-creation API.
+-   The .NET 8 diagnostic runner now accepts `--no-wait` for non-interactive execution.
+
+### Fixed
+
+-   Object-creation timeouts now surface as `TimeoutException` and remove pending request and packet mappings.
+-   Pending creation continuations now run asynchronously, avoiding inline continuation work on the SimConnect message-processing path.
+
 ## [0.2.1] - 2026-05-12
 
 ### Performance

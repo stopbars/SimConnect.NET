@@ -26,6 +26,7 @@ namespace SimConnect.NET
         private bool disposed;
         private CancellationTokenSource? messageLoopCancellation;
         private Task? messageProcessingTask;
+        private TaskCompletionSource<bool>? simulatorIdentification;
         private SimVarManager? simVarManager;
         private AircraftDataManager? aircraftDataManager;
         private SimObjectManager? simObjectManager;
@@ -246,6 +247,7 @@ namespace SimConnect.NET
                 throw new InvalidOperationException("Already connected to SimConnect.");
             }
 
+            this.simulatorIdentification = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             await this.nativeDispatcher.InvokeAsync(
                 () =>
                 {
@@ -340,6 +342,8 @@ namespace SimConnect.NET
                 this.inputEventManager?.Dispose();
                 this.inputGroupManager?.Dispose();
                 this.simObjectManager = null;
+                this.simulatorIdentification?.TrySetCanceled();
+                this.simulatorIdentification = null;
                 this.isMSFS2024 = false;
                 this.simVarManager = null;
                 this.aircraftDataManager = null;
@@ -649,6 +653,17 @@ namespace SimConnect.NET
             return this.nativeDispatcher.InvokeAsync(() => operation(this.Handle), cancellationToken);
         }
 
+        internal async Task<bool> GetIsMSFS2024Async(CancellationToken cancellationToken)
+        {
+            var identification = this.simulatorIdentification;
+            if (identification == null)
+            {
+                throw new InvalidOperationException("Simulator identification is unavailable because SimConnect is not connected.");
+            }
+
+            return await identification.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Processes an assigned object ID message from SimConnect.
         /// </summary>
@@ -686,12 +701,23 @@ namespace SimConnect.NET
 
                 SimConnectLogger.Warning($"SimConnect error received: {SimConnectErrorMapper.Format(error)} (SendId={recvError.SendId}, Index={recvError.Index})");
 
-                this.OnErrorOccurred(error, null, $"SimConnect error (SendId={recvError.SendId}, Index={recvError.Index})");
-
-                if (this.simObjectManager != null)
+                SimConnectException? creationException = null;
+                if (this.simObjectManager != null &&
+                    this.simObjectManager.TryResolveRequestId(recvError.SendId, out var requestId))
                 {
-                    this.simObjectManager.ProcessObjectCreationFailed(recvError.SendId, error);
+                    creationException = this.simObjectManager.ProcessObjectCreationFailed(
+                        requestId,
+                        error,
+                        recvError.SendId,
+                        recvError.Index);
                 }
+
+                this.OnErrorOccurred(
+                    error,
+                    creationException ?? SimConnectErrorMapper.Wrap("SimConnect server request", error),
+                    $"SimConnect error (SendId={recvError.SendId}, Index={recvError.Index})",
+                    recvError.SendId,
+                    recvError.Index);
             }
             catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
             {
@@ -712,6 +738,7 @@ namespace SimConnect.NET
 
                 // According to community reports (and current beta docs), ApplicationVersionMajor == 12 indicates MSFS 2024.
                 this.isMSFS2024 = recvOpen.ApplicationVersionMajor == 12;
+                this.simulatorIdentification?.TrySetResult(this.isMSFS2024);
                 SimConnectLogger.Info($"SimConnect OPEN received: AppVersion={recvOpen.ApplicationVersionMajor}.{recvOpen.ApplicationVersionMinor} Build={recvOpen.ApplicationBuildMajor}.{recvOpen.ApplicationBuildMinor} (IsMSFS2024={this.isMSFS2024})");
             }
             catch (Exception ex) when (!ExceptionHelper.IsCritical(ex))
@@ -933,9 +960,16 @@ namespace SimConnect.NET
         /// <param name="error">The SimConnect error that occurred.</param>
         /// <param name="exception">The exception that was thrown, if any.</param>
         /// <param name="context">Additional context about when/where the error occurred.</param>
-        private void OnErrorOccurred(SimConnectError error, Exception? exception = null, string? context = null)
+        /// <param name="sendId">The native packet ID associated with the error.</param>
+        /// <param name="index">The one-based parameter index associated with the error.</param>
+        private void OnErrorOccurred(
+            SimConnectError error,
+            Exception? exception = null,
+            string? context = null,
+            uint? sendId = null,
+            uint? index = null)
         {
-            var eventArgs = new SimConnectErrorEventArgs(error, exception, context);
+            var eventArgs = new SimConnectErrorEventArgs(error, exception, context, sendId: sendId, index: index);
             this.ErrorOccurred?.Invoke(this, eventArgs);
         }
 
