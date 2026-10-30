@@ -519,6 +519,14 @@ namespace SimConnect.NET.SimVar
             request.SetCanceled();
         }
 
+        private static bool IsStringDataType(SimConnectDataType dataType) =>
+            dataType is SimConnectDataType.String8
+                or SimConnectDataType.String32
+                or SimConnectDataType.String64
+                or SimConnectDataType.String128
+                or SimConnectDataType.String256
+                or SimConnectDataType.String260;
+
         private static SimConnectDataType InferDataType<T>()
         {
             var type = typeof(T);
@@ -850,12 +858,21 @@ namespace SimConnect.NET.SimVar
                 }
             }
 
-            if (unit == null || dataType is not SimConnectDataType dt)
+            if (dataType is not SimConnectDataType dt)
             {
                 throw new ArgumentException($"Unit and dataType must not be null for SimVar '{name}'.");
             }
 
-            var key = (Name: name, Unit: unit, DataType: dt);
+            if (IsStringDataType(dt))
+            {
+                unit = null;
+            }
+            else if (unit is null)
+            {
+                throw new ArgumentException($"Unit and dataType must not be null for SimVar '{name}'.");
+            }
+
+            var key = (Name: name, Unit: unit ?? string.Empty, DataType: dt);
 
             if (this.dataDefinitions.TryGetValue(key, out var existingId))
             {
