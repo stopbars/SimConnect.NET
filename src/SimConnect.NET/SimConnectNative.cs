@@ -170,7 +170,7 @@ namespace SimConnect.NET
             IntPtr hSimConnect,
             uint defineId,
             [MarshalAs(UnmanagedType.LPStr)] string datumName,
-            [MarshalAs(UnmanagedType.LPStr)] string unitsName,
+            [MarshalAs(UnmanagedType.LPStr)] string? unitsName,
             uint datumType = 4,
             float fEpsilon = 0,
             uint datumId = SimConnectUnused);
